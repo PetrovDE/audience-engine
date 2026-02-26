@@ -6,6 +6,7 @@ from typing import Dict, List, Tuple
 import yaml
 
 from .config import EMBEDDINGS_PATH, EMBED_SPEC_PATH
+from .gpu_guard import ensure_gpu_available
 from .metrics import record_embedding_batch
 
 try:
@@ -35,6 +36,8 @@ def build_embeddings(
     output_path: Path = EMBEDDINGS_PATH,
     ollama_model: str = "nomic-embed-text",
 ) -> Tuple[Path, int]:
+    ensure_gpu_available("Embedding jobs/services")
+
     with EMBED_SPEC_PATH.open("r", encoding="utf-8") as f:
         emb_spec = yaml.safe_load(f)
 
@@ -66,8 +69,13 @@ def build_embeddings(
                 "vector": vector,
                 "is_employee_flag": row["is_employee_flag"],
                 "do_not_contact_flag": row["do_not_contact_flag"],
+                "opt_out_flag": row.get("opt_out_flag", False),
+                "legal_suppression_flag": row.get("legal_suppression_flag", False),
                 "customer_tenure_months": row["customer_tenure_months"],
                 "delinquency_12m_count": row["delinquency_12m_count"],
+                "region_code": row.get("region_code", "unknown"),
+                "segment_id": row.get("segment_id", "unknown"),
+                "product_line": row.get("product_line", "unknown"),
             }
             f.write(json.dumps(payload) + "\n")
     return output_path, dim

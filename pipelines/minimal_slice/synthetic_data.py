@@ -11,6 +11,18 @@ def _random_credit_band(rng: random.Random) -> str:
     return rng.choices(["low", "medium", "high"], weights=[2, 5, 3], k=1)[0]
 
 
+def _random_region_code(rng: random.Random) -> str:
+    return rng.choices(["us_west", "us_central", "us_east"], weights=[3, 3, 4], k=1)[0]
+
+
+def _random_segment_id(rng: random.Random) -> str:
+    return rng.choices(["mass", "affluent", "student", "smb"], weights=[6, 2, 1, 1], k=1)[0]
+
+
+def _random_product_line(rng: random.Random) -> str:
+    return rng.choices(["credit_card", "personal_loan"], weights=[7, 3], k=1)[0]
+
+
 def _random_customer(idx: int, rng: random.Random) -> Dict:
     now = datetime.now(timezone.utc)
     tenure = rng.randint(1, 120)
@@ -26,6 +38,9 @@ def _random_customer(idx: int, rng: random.Random) -> Dict:
         "utilization_ratio_avg_3m": round(rng.uniform(0.1, 0.95), 4),
         "card_spend_total_3m": round(rng.uniform(200, 9000), 2),
         "digital_engagement_score": round(rng.uniform(0, 1), 4),
+        "region_code": _random_region_code(rng),
+        "segment_id": _random_segment_id(rng),
+        "product_line": _random_product_line(rng),
         "is_employee_flag": rng.random() < 0.03,
         "do_not_contact_flag": rng.random() < 0.08,
     }

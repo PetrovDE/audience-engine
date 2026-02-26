@@ -5,3 +5,4 @@ langchain==0.3.27
 langchain-ollama==0.3.8
 pyyaml==6.0.2
 prometheus-client==0.22.1
+psycopg[binary]==3.2.9

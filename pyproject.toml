@@ -16,6 +16,7 @@ runtime-minimal-slice = [
   "langchain==0.3.27",
   "langchain-ollama==0.3.8",
   "prometheus-client==0.22.1",
+  "psycopg[binary]==3.2.9",
   "pyyaml==6.0.2",
   "qdrant-client==1.15.1",
 ]

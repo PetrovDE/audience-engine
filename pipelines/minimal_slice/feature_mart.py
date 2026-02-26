@@ -44,6 +44,11 @@ def build_feature_mart_snapshot(raw_path: Path, output_path: Path = FEATURE_MART
             snap[name] = row[name]
         snap["is_employee_flag"] = bool(row.get("is_employee_flag", False))
         snap["do_not_contact_flag"] = bool(row.get("do_not_contact_flag", False))
+        snap["opt_out_flag"] = bool(row.get("opt_out_flag", False))
+        snap["legal_suppression_flag"] = bool(row.get("legal_suppression_flag", False))
+        snap["region_code"] = str(row.get("region_code", "unknown"))
+        snap["segment_id"] = str(row.get("segment_id", "unknown"))
+        snap["product_line"] = str(row.get("product_line", "unknown"))
         snapshot_rows.append(snap)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

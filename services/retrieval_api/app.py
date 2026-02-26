@@ -1,5 +1,5 @@
 import json
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
 from prometheus_client import make_asgi_app
@@ -17,6 +17,18 @@ class RetrieveRequest(BaseModel):
     top_k: int = Field(default=20, ge=1, le=200)
     query_text: Optional[str] = None
     query_customer_id: Optional[str] = None
+    product_line: Optional[str] = None
+    region_codes: Optional[List[str]] = None
+    segment_ids: Optional[List[str]] = None
+    include_employee: bool = False
+    include_do_not_contact: bool = False
+    include_opt_out: bool = False
+    include_legal_suppression: bool = False
+    min_tenure_months: Optional[int] = Field(default=None, ge=0)
+    max_delinquency_12m_count: Optional[int] = Field(default=None, ge=0)
+    fs_version: Optional[str] = None
+    emb_version: Optional[str] = None
+    policy_version: Optional[str] = None
 
 
 @app.get("/healthz")
@@ -51,6 +63,18 @@ def retrieve(request: RetrieveRequest) -> dict:
             top_k=request.top_k,
             query_text=request.query_text,
             query_customer_id=request.query_customer_id,
+            product_line=request.product_line,
+            region_codes=request.region_codes,
+            segment_ids=request.segment_ids,
+            include_employee=request.include_employee,
+            include_do_not_contact=request.include_do_not_contact,
+            include_opt_out=request.include_opt_out,
+            include_legal_suppression=request.include_legal_suppression,
+            min_tenure_months=request.min_tenure_months,
+            max_delinquency_12m_count=request.max_delinquency_12m_count,
+            fs_version=request.fs_version,
+            emb_version=request.emb_version,
+            policy_version=request.policy_version,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

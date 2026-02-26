@@ -9,7 +9,7 @@ client = TestClient(app_module.app)
 def test_healthz_smoke():
     response = client.get("/healthz")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "ok", "version_bundle": None}
 
 
 def test_retrieve_requires_query():
@@ -22,7 +22,7 @@ def test_retrieve_smoke_with_monkeypatched_backend(monkeypatch):
     monkeypatch.setattr(
         app_module,
         "retrieve_similar",
-        lambda top_k, query_text, query_customer_id: [
+        lambda **kwargs: [
             {"customer_id": "cust_00001", "score": 0.99, "payload": {}}
         ],
     )

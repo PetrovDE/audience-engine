@@ -104,6 +104,38 @@ docker compose --env-file infra/.env -f infra/docker-compose.dev.yml exec -T oll
 
 Expected: NVIDIA device list visible from inside the container.
 
+### Embedding runtime GPU preflight checklist
+
+Embedding jobs/services now fail fast before embedding calls when no GPU is detected.
+
+Run this checklist before `build_embeddings`, minimal-slice flow runs, or retrieval calls that use `query_text`:
+
+1. Host GPU is visible:
+
+```bash
+nvidia-smi
+```
+
+2. Docker GPU passthrough works:
+
+```bash
+docker run --rm --gpus all nvidia/cuda:12.4.1-runtime-ubuntu22.04 nvidia-smi
+```
+
+3. Ollama service container sees GPU:
+
+```bash
+docker compose --env-file infra/.env -f infra/docker-compose.dev.yml exec -T ollama nvidia-smi
+```
+
+4. Optional Python-level check (if `torch` is installed in the runtime):
+
+```bash
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
+If preflight fails at runtime, use the remediation message from the exception and verify NVIDIA driver + NVIDIA Container Toolkit installation steps in sections 1 and 2 of this document.
+
 ### Airflow check
 
 Open `http://localhost:8080` and log in with `AIRFLOW_ADMIN_USERNAME` / `AIRFLOW_ADMIN_PASSWORD` from `infra/.env`.

@@ -1,18 +1,31 @@
 import json
+from collections import Counter
 from datetime import datetime, timezone
 from uuid import uuid4
 
+import psycopg
 import yaml
+
+from pipelines.version_bundle import (
+    VersionBundle,
+    build_version_bundle,
+    preflight_version_bundle,
+)
 
 from .config import (
     BLACKLIST_PATH,
     COMM_HISTORY_PATH,
     EMBED_SPEC_PATH,
     EXPORT_PATH,
+    FEATURE_MART_PATH,
     FEATURE_SET_PATH,
     GOVERNANCE_DIR,
-    FEATURE_MART_PATH,
     POLICY_VERSION,
+    POSTGRES_DB,
+    POSTGRES_HOST,
+    POSTGRES_PASSWORD,
+    POSTGRES_PORT,
+    POSTGRES_USER,
     QDRANT_ALIAS,
     RAW_PATH,
     SUMMARY_PATH,
@@ -24,11 +37,6 @@ from .policy_engine import evaluate_policy
 from .qdrant_index import create_or_replace_index
 from .retrieval import retrieve_similar
 from .synthetic_data import generate_synthetic_data
-from pipelines.version_bundle import (
-    VersionBundle,
-    build_version_bundle,
-    preflight_version_bundle,
-)
 
 
 def _load_feature_set_version() -> str:
@@ -60,9 +68,144 @@ def _build_and_validate_bundle(campaign_id: str) -> VersionBundle:
             "do_not_contact_flag",
             "customer_tenure_months",
             "delinquency_12m_count",
+            "opt_out_flag",
+            "legal_suppression_flag",
+            "product_line",
+            "region_code",
+            "segment_id",
         },
     )
     return bundle
+
+
+def _postgres_conninfo() -> str:
+    return (
+        f"host={POSTGRES_HOST} "
+        f"port={POSTGRES_PORT} "
+        f"dbname={POSTGRES_DB} "
+        f"user={POSTGRES_USER} "
+        f"password={POSTGRES_PASSWORD}"
+    )
+
+
+def _build_audit_rows(
+    *,
+    retrieved: list[dict],
+    policy_result: dict,
+    bundle: VersionBundle,
+    run_ts: str,
+    product_id: str,
+    channel: str,
+    resolved_collection: str,
+) -> tuple[dict, list[tuple], list[tuple]]:
+    ranking: dict[str, tuple[float, int]] = {}
+    for idx, row in enumerate(retrieved, start=1):
+        customer_id = row.get("customer_id")
+        if not customer_id:
+            continue
+        ranking[customer_id] = (float(row.get("score", 0.0)), idx)
+
+    selected_rows: list[tuple] = []
+    selected_customer_ids = {
+        row["customer_id"] for row in policy_result.get("selected", [])
+    }
+    reject_counts: Counter = Counter(policy_result.get("rejection_summary", {}))
+    for row in policy_result["results"]:
+        customer_id = row["customer_id"]
+        if customer_id in selected_customer_ids:
+            score, rank = ranking.get(customer_id, (0.0, 0))
+            selected_rows.append(
+                (bundle.run_id, customer_id, score, rank, channel, run_ts)
+            )
+            continue
+
+    rejection_rows = [
+        (bundle.run_id, reason_code, count, run_ts)
+        for reason_code, count in sorted(reject_counts.items())
+    ]
+    run_row = {
+        "run_id": bundle.run_id,
+        "campaign_id": bundle.campaign_id,
+        "product_id": product_id,
+        "run_ts": run_ts,
+        "version_bundle": {
+            "fs_version": bundle.fs_version,
+            "emb_version": bundle.emb_version,
+            "policy_version": bundle.policy_version,
+            "index_alias": bundle.index_alias,
+            "concrete_qdrant_collection": resolved_collection,
+            "run_id": bundle.run_id,
+            "campaign_id": bundle.campaign_id,
+        },
+        "parameters": {
+            "query_customer_id": "cust_00000",
+            "retrieval_top_k": len(retrieved),
+            "channel": channel,
+            "requested_size": len(selected_rows),
+            "policy_rejection_summary": dict(reject_counts),
+        },
+    }
+    return run_row, selected_rows, rejection_rows
+
+
+def _write_audit_to_postgres(
+    *,
+    run_row: dict,
+    selected_rows: list[tuple],
+    rejection_rows: list[tuple],
+) -> None:
+    with psycopg.connect(_postgres_conninfo()) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO audience_run (
+                    run_id,
+                    campaign_id,
+                    product_id,
+                    run_ts,
+                    version_bundle,
+                    parameters
+                )
+                VALUES (%s, %s, %s, %s::timestamptz, %s::jsonb, %s::jsonb)
+                """,
+                (
+                    run_row["run_id"],
+                    run_row["campaign_id"],
+                    run_row["product_id"],
+                    run_row["run_ts"],
+                    json.dumps(run_row["version_bundle"]),
+                    json.dumps(run_row["parameters"]),
+                ),
+            )
+            if selected_rows:
+                cur.executemany(
+                    """
+                    INSERT INTO audience_run_selected (
+                        run_id,
+                        customer_id,
+                        final_score,
+                        rank,
+                        channel,
+                        selected_ts
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s::timestamptz)
+                    """,
+                    selected_rows,
+                )
+            if rejection_rows:
+                cur.executemany(
+                    """
+                    INSERT INTO audience_run_rejections_summary (
+                        run_id,
+                        reason_code,
+                        rejected_count,
+                        summary_ts
+                    )
+                    VALUES (%s, %s, %s, %s::timestamptz)
+                    """,
+                    rejection_rows,
+                )
+        conn.commit()
 
 
 def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
@@ -80,19 +223,64 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
     )
 
     query_customer = "cust_00000"
-    retrieved = retrieve_similar(top_k=50, query_customer_id=query_customer)
-    policy_input = [{"customer_id": row["customer_id"]} for row in retrieved]
+    retrieved = retrieve_similar(
+        top_k=50,
+        query_customer_id=query_customer,
+        product_line="credit_card",
+        region_codes=["us_west", "us_central", "us_east"],
+        segment_ids=["mass", "affluent", "student", "smb"],
+        min_tenure_months=3,
+        max_delinquency_12m_count=2,
+    )
+    policy_input = []
+    for row in retrieved:
+        payload = row.get("payload") or {}
+        policy_input.append(
+            {
+                "customer_id": row["customer_id"],
+                "score": row.get("score", 0.0),
+                "do_not_contact_flag": payload.get("do_not_contact_flag", False),
+                "is_employee_flag": payload.get("is_employee_flag", False),
+                "customer_tenure_months": payload.get("customer_tenure_months", 0),
+                "delinquency_12m_count": payload.get("delinquency_12m_count", 0),
+                "opt_out_flag": payload.get("opt_out_flag", False),
+                "legal_suppression_flag": payload.get("legal_suppression_flag", False),
+            }
+        )
     policy_result = evaluate_policy(
         candidates=policy_input,
+        policy_version=bundle.policy_version,
         blacklist_path=BLACKLIST_PATH,
         comm_history_path=COMM_HISTORY_PATH,
-        daily_freq_cap=2,
+        campaign_id=bundle.campaign_id,
+        requested_size=20,
     )
-    export_path = export_approved(policy_result=policy_result, output_path=EXPORT_PATH)
+    export_ready = {
+        **policy_result,
+        "results": [
+            row for row in policy_result["results"] if row.get("selected", False)
+        ],
+    }
+    export_path = export_approved(policy_result=export_ready, output_path=EXPORT_PATH)
+    run_ts = datetime.now(timezone.utc).isoformat()
+    run_row, selected_rows, rejection_rows = _build_audit_rows(
+        retrieved=retrieved,
+        policy_result=policy_result,
+        bundle=bundle,
+        run_ts=run_ts,
+        product_id="minimal_slice",
+        channel="email",
+        resolved_collection=index_meta["collection"],
+    )
+    _write_audit_to_postgres(
+        run_row=run_row,
+        selected_rows=selected_rows,
+        rejection_rows=rejection_rows,
+    )
 
     summary = {
-        "run_ts": datetime.now(timezone.utc).isoformat(),
-        "versions": bundle.__dict__,
+        "run_ts": run_ts,
+        "versions": run_row["version_bundle"],
         "inputs": {
             "raw_path": str(RAW_PATH),
             "feature_mart_path": str(feature_mart_path),
@@ -101,9 +289,19 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
             "comm_history_path": str(COMM_HISTORY_PATH),
         },
         "index": index_meta,
-        "retrieval": {"query_customer_id": query_customer, "retrieved_count": len(retrieved)},
+        "retrieval": {
+            "query_customer_id": query_customer,
+            "retrieved_count": len(retrieved),
+        },
         "policy": policy_result["summary"],
         "export_path": str(export_path),
+        "audit": {
+            "postgres": {
+                "run_table": "audience_run",
+                "selected_rows_written": len(selected_rows),
+                "rejection_summary_rows_written": len(rejection_rows),
+            }
+        },
     }
 
     SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
