@@ -1,0 +1,42 @@
+[project]
+name = "audience-engine"
+version = "0.1.0"
+description = "Audience Engine bootstrap repository"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+runtime-retrieval-api = [
+  "fastapi==0.116.1",
+  "pydantic==2.11.7",
+  "prometheus-client==0.22.1",
+  "uvicorn==0.35.0",
+]
+runtime-minimal-slice = [
+  "langchain==0.3.27",
+  "langchain-ollama==0.3.8",
+  "prometheus-client==0.22.1",
+  "pyyaml==6.0.2",
+  "qdrant-client==1.15.1",
+]
+dev = [
+  "mypy==1.17.1",
+  "pytest==8.3.4",
+  "ruff==0.12.10",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+warn_unused_ignores = true

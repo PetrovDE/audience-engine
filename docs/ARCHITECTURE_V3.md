@@ -66,3 +66,25 @@ It supports large-scale retrieval and ranking for campaign audience construction
 - Batch vs streaming ingestion mode per source domain.
 - Ranking model strategy and calibration workflow.
 - SLO and performance test harness definitions.
+
+## Current Repository Reality (2026-02-26)
+This section records implementation status against V3 constraints so architecture intent and repository reality stay aligned.
+
+### Implemented and Present
+- LangChain-based embedding path is implemented (`langchain-ollama`).
+- Qdrant is the default vector database in runtime code and compose stacks.
+- Alias switching exists for serving (`audience-serving` -> active collection).
+- A policy check step runs before export in the minimal vertical slice flow.
+- Governance registries and contracts exist under `governance/`.
+- Infra presence exists for Postgres, Redis, MinIO, ClickHouse, Qdrant, Airflow, Prometheus, and Grafana.
+
+### Partially Implemented / Divergent from V3
+- GPU-first is declared in compose for `ollama`, but hard runtime enforcement is not implemented.
+- Blue/green lifecycle is incomplete in practice: only a blue collection path is implemented, with no retained green generation strategy.
+- Policy Engine behavior does not fully execute `governance/policies/policy_registry.yaml` rules at runtime.
+- Audience run audit output (`data/minimal_slice/run/run_summary.json`) is file-based, not immutable, and does not consistently carry all required version references (`emb_version` is not persisted at run summary level).
+- Version contracts are present in governance files, but registry-driven validation and strict bump/changelog workflow enforcement are not implemented in runtime checks.
+
+### Scale and Governance Implications
+- Current minimal slice is a functional bootstrap, not a production-ready 10M-customer architecture.
+- Additional work is required for index lifecycle safety, payload filtering/indexing strategy, immutable audit lineage, and PII guardrail enforcement at runtime.

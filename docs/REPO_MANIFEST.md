@@ -10,6 +10,7 @@
 - `scripts/`
 - `services/`
 - `tests/`
+- `.gitignore`
 - `CODE_OF_CONDUCT.md`
 - `CONTRIBUTING.md`
 - `LICENSE`
@@ -20,6 +21,7 @@
 - `RELEASE_NOTES_v0.1.0.md`
 - `RUNBOOK.md`
 - `SECURITY.md`
+- `pyproject.toml`
 - `requirements.txt`
 
 ## Documentation Inventory
@@ -27,6 +29,8 @@
 - `docs/BUILD_PLAN.md`
 - `docs/CURSOR_WORKFLOW.md`
 - `docs/DEPLOYMENT.md`
+- `docs/DEVELOPMENT.md`
+- `docs/GAP_REPORT_ARCH_VS_REPO.md`
 - `docs/GOVERNANCE.md`
 - `docs/POLICY_ENGINE_SPEC.md`
 - `docs/REPO_MANIFEST.md`

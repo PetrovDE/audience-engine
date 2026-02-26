@@ -3,14 +3,32 @@ SHELL := /bin/sh
 ENV_FILE ?= infra/.env
 DEV_COMPOSE := docker compose --env-file $(ENV_FILE) -f infra/docker-compose.dev.yml
 PROD_COMPOSE := docker compose --env-file $(ENV_FILE) -f infra/docker-compose.yml
+UV ?= uv
+UV_RUN := $(UV) run
 
-.PHONY: env init up down restart logs ps config dev-up dev-down prod-up prod-down verify minimal-slice retrieval-api
+.PHONY: env init bootstrap lint format test test-integration up down restart logs ps config dev-up dev-down prod-up prod-down verify seed build-index demo minimal-slice retrieval-api
 
 env:
 	@if [ ! -f $(ENV_FILE) ]; then cp infra/.env.example $(ENV_FILE); fi
 
+bootstrap:
+	$(UV) venv .venv --python 3.11
+	$(UV) sync --group runtime-retrieval-api --group runtime-minimal-slice --group dev --locked
+
 init: env
 	$(DEV_COMPOSE) pull
+
+lint:
+	$(UV_RUN) ruff check .
+
+format:
+	$(UV_RUN) ruff format .
+
+test:
+	$(UV_RUN) pytest -q tests/unit
+
+test-integration:
+	$(UV_RUN) pytest -q tests/integration
 
 dev-up: env
 	$(DEV_COMPOSE) up -d
@@ -44,8 +62,17 @@ verify:
 	docker compose --env-file $(ENV_FILE) -f infra/docker-compose.dev.yml exec -T qdrant curl -fsS http://localhost:6333/healthz
 	docker compose --env-file $(ENV_FILE) -f infra/docker-compose.dev.yml exec -T ollama ollama list
 
+seed:
+	$(UV_RUN) python -c "from pipelines.minimal_slice.synthetic_data import generate_synthetic_data; print(generate_synthetic_data(customer_count=200, seed=7))"
+
+build-index:
+	$(UV_RUN) python -c "from pipelines.minimal_slice.feature_mart import build_feature_mart_snapshot; from pipelines.minimal_slice.embedding import build_embeddings; from pipelines.minimal_slice.qdrant_index import create_or_replace_index; from pipelines.minimal_slice.config import RAW_PATH; fm=build_feature_mart_snapshot(raw_path=RAW_PATH); ep, vs = build_embeddings(feature_mart_path=fm); print(create_or_replace_index(embeddings_path=ep, vector_size=vs))"
+
+demo:
+	$(UV_RUN) python -m pipelines.minimal_slice.run_flow
+
 minimal-slice:
-	python -m pipelines.minimal_slice.run_flow
+	$(UV_RUN) python -m pipelines.minimal_slice.run_flow
 
 retrieval-api:
-	python -m uvicorn services.retrieval_api.app:app --host 0.0.0.0 --port 8000
+	$(UV_RUN) python -m uvicorn services.retrieval_api.app:app --host 0.0.0.0 --port 8000
