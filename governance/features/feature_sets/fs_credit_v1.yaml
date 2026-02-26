@@ -1,0 +1,24 @@
+version: 1
+feature_set: fs_credit_v1
+fs_version: fs_credit_v1
+owner: feature-platform
+source_registry: governance/features/feature_registry.yaml
+updated_at: 2026-02-26
+purpose: Baseline governed non-PII feature set for credit audience ranking and similarity.
+constraints:
+  - no_pii_features
+  - all_features_must_exist_in_registry
+  - embedding_inputs_must_be_allowlisted
+features:
+  - customer_age_years
+  - customer_tenure_months
+  - credit_score_band
+  - delinquency_12m_count
+  - utilization_ratio_avg_3m
+  - card_spend_total_3m
+  - digital_engagement_score
+excluded_features:
+  - is_employee_flag
+  - do_not_contact_flag
+  - first_name
+  - ssn_hash

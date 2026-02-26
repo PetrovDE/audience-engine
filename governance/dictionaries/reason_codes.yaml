@@ -1,0 +1,23 @@
+version: 1
+dictionary: reason_codes
+owner: policy-engine
+updated_at: 2026-02-26
+codes:
+  - code: SUPPRESS_DNC
+    class: suppression
+    message: Customer opted out of contact.
+  - code: SUPPRESS_EMPLOYEE
+    class: suppression
+    message: Customer is marked as internal employee.
+  - code: ELIGIBILITY_TENURE_LT_3M
+    class: eligibility
+    message: Customer tenure is less than required threshold.
+  - code: RISK_DELINQ_GT_2
+    class: risk
+    message: Customer delinquency count exceeds allowed threshold.
+  - code: QUOTA_DAILY_CAMPAIGN_REACHED
+    class: quota
+    message: Campaign daily quota reached for this customer.
+  - code: CONFLICT_ACTIVE_CAMPAIGN
+    class: conflict
+    message: Customer already active in conflicting campaign.

@@ -1,0 +1,31 @@
+version: 1
+embedding_spec: emb_llm_v1
+emb_version: emb_llm_v1
+owner: ml-platform
+updated_at: 2026-02-26
+composition:
+  fs_version: fs_credit_v1
+  prompt_version: prompt_credit_v1
+  model_version: text-embedding-3-large
+  emb_version_rule: fs_version + prompt_version + model_version
+runtime:
+  framework: langchain
+  vector_db_default: qdrant
+  vector_db_dev_small_mode: pgvector
+  gpu_required: true
+input_policy:
+  source_feature_set: governance/features/feature_sets/fs_credit_v1.yaml
+  allowlist_only: true
+  forbid_pii: true
+  forbid_sensitive_logs: true
+template:
+  id: prompt_credit_v1
+  format: |
+    customer_profile:
+      age_years={customer_age_years}
+      tenure_months={customer_tenure_months}
+      credit_score_band={credit_score_band}
+      delinquency_12m_count={delinquency_12m_count}
+      utilization_ratio_avg_3m={utilization_ratio_avg_3m}
+      card_spend_total_3m={card_spend_total_3m}
+      digital_engagement_score={digital_engagement_score}

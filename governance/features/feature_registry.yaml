@@ -1,0 +1,93 @@
+version: 1
+registry: feature_registry
+owner: data-governance
+updated_at: 2026-02-26
+features:
+  - id: customer_age_years
+    domain: customer
+    type: int
+    nullable: false
+    pii: none
+    embedding_allowed: true
+    description: Customer age in years at scoring time.
+
+  - id: customer_tenure_months
+    domain: customer
+    type: int
+    nullable: false
+    pii: none
+    embedding_allowed: true
+    description: Months since customer onboarding.
+
+  - id: credit_score_band
+    domain: risk
+    type: string
+    nullable: false
+    pii: none
+    embedding_allowed: true
+    allowed_values: [low, medium, high]
+    description: Bucketed bureau score band.
+
+  - id: delinquency_12m_count
+    domain: risk
+    type: int
+    nullable: false
+    pii: none
+    embedding_allowed: true
+    description: Count of delinquency events in trailing 12 months.
+
+  - id: utilization_ratio_avg_3m
+    domain: credit
+    type: float
+    nullable: false
+    pii: none
+    embedding_allowed: true
+    description: Mean revolving utilization ratio over trailing 3 months.
+
+  - id: card_spend_total_3m
+    domain: spend
+    type: decimal
+    nullable: false
+    pii: none
+    embedding_allowed: true
+    description: Total card spend over trailing 3 months.
+
+  - id: digital_engagement_score
+    domain: behavior
+    type: float
+    nullable: false
+    pii: none
+    embedding_allowed: true
+    description: Composite engagement score from digital interaction events.
+
+  - id: is_employee_flag
+    domain: compliance
+    type: bool
+    nullable: false
+    pii: none
+    embedding_allowed: false
+    description: Internal employee marker used for policy suppression only.
+
+  - id: do_not_contact_flag
+    domain: compliance
+    type: bool
+    nullable: false
+    pii: none
+    embedding_allowed: false
+    description: Contact consent suppression marker.
+
+  - id: first_name
+    domain: identity
+    type: string
+    nullable: true
+    pii: direct
+    embedding_allowed: false
+    description: Direct identifier and never eligible for embedding.
+
+  - id: ssn_hash
+    domain: identity
+    type: string
+    nullable: true
+    pii: sensitive
+    embedding_allowed: false
+    description: Sensitive identity artifact and never eligible for embedding.

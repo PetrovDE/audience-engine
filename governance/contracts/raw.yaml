@@ -1,0 +1,36 @@
+version: 1
+contract: raw
+owner: data-ingestion
+updated_at: 2026-02-26
+description: Canonical raw ingestion contract prior to feature transformations.
+primary_key:
+  - customer_id
+fields:
+  - name: customer_id
+    type: string
+    required: true
+    pii: direct
+  - name: first_name
+    type: string
+    required: false
+    pii: direct
+  - name: ssn_hash
+    type: string
+    required: false
+    pii: sensitive
+  - name: event_ts
+    type: timestamp
+    required: true
+    pii: none
+  - name: card_spend_amount
+    type: decimal
+    required: false
+    pii: none
+  - name: delinquency_flag
+    type: bool
+    required: false
+    pii: none
+  - name: do_not_contact_flag
+    type: bool
+    required: false
+    pii: none

@@ -1,0 +1,55 @@
+version: 1
+contract: feature_mart
+owner: feature-platform
+updated_at: 2026-02-26
+description: Governed feature mart contract consumed by ranking, embedding, and policy layers.
+primary_key:
+  - customer_id
+required_versions:
+  - fs_version
+  - policy_version
+fields:
+  - name: customer_id
+    type: string
+    required: true
+    pii: direct
+  - name: fs_version
+    type: string
+    required: true
+    pii: none
+  - name: customer_age_years
+    type: int
+    required: true
+    pii: none
+  - name: customer_tenure_months
+    type: int
+    required: true
+    pii: none
+  - name: credit_score_band
+    type: string
+    required: true
+    pii: none
+  - name: delinquency_12m_count
+    type: int
+    required: true
+    pii: none
+  - name: utilization_ratio_avg_3m
+    type: float
+    required: true
+    pii: none
+  - name: card_spend_total_3m
+    type: decimal
+    required: true
+    pii: none
+  - name: digital_engagement_score
+    type: float
+    required: true
+    pii: none
+  - name: is_employee_flag
+    type: bool
+    required: true
+    pii: none
+  - name: do_not_contact_flag
+    type: bool
+    required: true
+    pii: none

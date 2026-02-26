@@ -1,0 +1,30 @@
+version: 1
+registry: policy_registry
+owner: policy-engine
+updated_at: 2026-02-26
+policies:
+  - policy_version: policy_credit_v1
+    status: active
+    scope: production_export_gate
+    description: Mandatory suppression and eligibility checks before audience export.
+    inputs:
+      raw_contract: governance/contracts/raw.yaml
+      feature_mart_contract: governance/contracts/feature_mart.yaml
+      reason_codes: governance/dictionaries/reason_codes.yaml
+    rules:
+      - id: suppress_do_not_contact
+        when: do_not_contact_flag == true
+        action: suppress
+        reason_code: SUPPRESS_DNC
+      - id: suppress_employee
+        when: is_employee_flag == true
+        action: suppress
+        reason_code: SUPPRESS_EMPLOYEE
+      - id: require_minimum_tenure
+        when: customer_tenure_months < 3
+        action: suppress
+        reason_code: ELIGIBILITY_TENURE_LT_3M
+      - id: suppress_recent_delinquency
+        when: delinquency_12m_count > 2
+        action: suppress
+        reason_code: RISK_DELINQ_GT_2
