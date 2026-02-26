@@ -1,4 +1,5 @@
 import json
+import hashlib
 from pathlib import Path
 from typing import Dict, List
 
@@ -25,19 +26,20 @@ def _read_jsonl(path: Path) -> List[Dict]:
 
 
 def _point_id(customer_id: str) -> int:
-    return abs(hash(customer_id)) % (2**31 - 1)
+    digest = hashlib.sha256(customer_id.encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], byteorder="big") & ((1 << 63) - 1)
 
 
-def switch_alias_to_blue() -> Dict[str, str]:
+def switch_alias(alias_name: str = QDRANT_ALIAS, collection_name: str = QDRANT_BLUE_COLLECTION) -> Dict[str, str]:
     client = QdrantClient(url=QDRANT_URL)
     try:
         client.update_collection_aliases(
             change_aliases_operation=[
-                DeleteAliasOperation(delete_alias={"alias_name": QDRANT_ALIAS}),
+                DeleteAliasOperation(delete_alias={"alias_name": alias_name}),
                 CreateAliasOperation(
                     create_alias={
-                        "collection_name": QDRANT_BLUE_COLLECTION,
-                        "alias_name": QDRANT_ALIAS,
+                        "collection_name": collection_name,
+                        "alias_name": alias_name,
                     }
                 ),
             ]
@@ -47,21 +49,30 @@ def switch_alias_to_blue() -> Dict[str, str]:
             change_aliases_operation=[
                 CreateAliasOperation(
                     create_alias={
-                        "collection_name": QDRANT_BLUE_COLLECTION,
-                        "alias_name": QDRANT_ALIAS,
+                        "collection_name": collection_name,
+                        "alias_name": alias_name,
                     }
                 )
             ]
         )
-    return {"alias": QDRANT_ALIAS, "collection": QDRANT_BLUE_COLLECTION}
+    return {"alias": alias_name, "collection": collection_name}
 
 
-def create_or_replace_index(embeddings_path: Path, vector_size: int) -> Dict[str, str]:
+def switch_alias_to_blue() -> Dict[str, str]:
+    return switch_alias(alias_name=QDRANT_ALIAS, collection_name=QDRANT_BLUE_COLLECTION)
+
+
+def create_or_replace_index(
+    embeddings_path: Path,
+    vector_size: int,
+    collection_name: str = QDRANT_BLUE_COLLECTION,
+    alias_name: str = QDRANT_ALIAS,
+) -> Dict[str, str]:
     client = QdrantClient(url=QDRANT_URL)
     points_src = _read_jsonl(embeddings_path)
 
     client.recreate_collection(
-        collection_name=QDRANT_BLUE_COLLECTION,
+        collection_name=collection_name,
         vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
     )
 
@@ -75,6 +86,6 @@ def create_or_replace_index(embeddings_path: Path, vector_size: int) -> Dict[str
                 payload=payload,
             )
         )
-    client.upsert(collection_name=QDRANT_BLUE_COLLECTION, points=points)
+    client.upsert(collection_name=collection_name, points=points)
 
-    return switch_alias_to_blue()
+    return switch_alias(alias_name=alias_name, collection_name=collection_name)

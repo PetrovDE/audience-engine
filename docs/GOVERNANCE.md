@@ -14,6 +14,36 @@ Required version contracts:
 - `fs_version`
 - `emb_version` (composed from `fs_version + prompt_version + model_version`)
 - `policy_version`
+- `index_alias`
+- `concrete_qdrant_collection` (index generation target)
+- `run_id` (UUID for immutable run lineage)
+- `campaign_id` (string/UUID campaign context)
+
+## VersionBundle Contract
+Runtime pipelines and services must exchange a single `VersionBundle` object containing:
+- `fs_version`
+- `emb_version`
+- `policy_version`
+- `index_alias`
+- `concrete_qdrant_collection`
+- `run_id`
+- `campaign_id`
+
+This bundle is the required lineage envelope for indexing, retrieval context, and run audit output.
+
+## Required Preflight Guards
+Before embedding/indexing/export, runtime must fail fast when:
+1. Any `VersionBundle` field is missing or invalid (`run_id` must be UUID).
+2. Embedding spec `composition.fs_version` does not match bundle `fs_version`.
+3. Bundle `policy_version` is not present in `governance/policies/policy_registry.yaml`.
+4. Any PII-tagged feature (`pii != none` in `feature_registry`) would be embedded or logged.
+
+## Deterministic Qdrant Point IDs
+- Qdrant point IDs must be deterministic across runs and processes.
+- Runtime must not use Python `hash(...)` for persisted point IDs.
+- Canonical method: `sha256(customer_id)` first 8 bytes, interpreted as big-endian integer, masked to positive 63-bit.
+- This keeps numeric point IDs stable for upsert/idempotency and avoids process-randomized hash behavior.
+- Collision risk is low for operational scales, but collision checks should remain in test coverage.
 
 ## File Map
 - `governance/features/feature_registry.yaml`: canonical feature metadata, PII classification, embedding allowlist flags.

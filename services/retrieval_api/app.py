@@ -1,10 +1,13 @@
+import json
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from prometheus_client import make_asgi_app
 from pydantic import BaseModel, Field
 
+from pipelines.minimal_slice.config import SUMMARY_PATH
 from pipelines.minimal_slice.retrieval import retrieve_similar
+from pipelines.version_bundle import VersionBundle
 
 app = FastAPI(title="Audience Engine Retrieval API", version="0.1.0")
 app.mount("/metrics", make_asgi_app())
@@ -18,7 +21,22 @@ class RetrieveRequest(BaseModel):
 
 @app.get("/healthz")
 def healthz() -> dict:
-    return {"status": "ok"}
+    bundle = _load_latest_version_bundle()
+    return {"status": "ok", "version_bundle": bundle.__dict__ if bundle else None}
+
+
+def _load_latest_version_bundle() -> Optional[VersionBundle]:
+    if not SUMMARY_PATH.exists():
+        return None
+    with SUMMARY_PATH.open("r", encoding="utf-8") as f:
+        summary = json.load(f)
+    versions = summary.get("versions")
+    if not isinstance(versions, dict):
+        return None
+    try:
+        return VersionBundle(**versions)
+    except TypeError:
+        return None
 
 
 @app.post("/v1/retrieve")
