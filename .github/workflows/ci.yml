@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  lint:
+  lint-format:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -22,8 +22,10 @@ jobs:
           version: "0.5.31"
       - name: Install deps
         run: uv sync --group runtime-retrieval-api --group runtime-minimal-slice --group dev --locked
-      - name: Ruff
+      - name: Lint
         run: make lint
+      - name: Format check
+        run: uv run ruff format --check .
 
   unit:
     runs-on: ubuntu-latest
@@ -41,9 +43,9 @@ jobs:
       - name: Install deps
         run: uv sync --group runtime-retrieval-api --group runtime-minimal-slice --group dev --locked
       - name: Run unit tests
-        run: make test
+        run: make test-unit
 
-  integration-smoke:
+  contracts:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -58,5 +60,5 @@ jobs:
           version: "0.5.31"
       - name: Install deps
         run: uv sync --group runtime-retrieval-api --group runtime-minimal-slice --group dev --locked
-      - name: Run integration smoke tests
-        run: make test-integration
+      - name: Run contract tests
+        run: make test-contracts

@@ -45,6 +45,30 @@ uv run pytest -q tests/unit
 uv run pytest -q tests/integration
 ```
 
+## CI (GitHub Actions)
+Workflows are defined under `.github/workflows`:
+
+- `ci.yml` (required on push/PR to `main`)
+  - lint + format check:
+    - `make lint`
+    - `uv run ruff format --check .`
+  - unit tests:
+    - `make test-unit`
+  - contract tests:
+    - `make test-contracts`
+
+- `integration-smoke.yml` (optional)
+  - triggers:
+    - manual: `workflow_dispatch`
+    - nightly: scheduled cron
+  - command:
+    - `make test-integration-smoke`
+  - defaults:
+    - CPU-safe path (`SKIP_GPU_TESTS=1`)
+    - synthetic data generation in smoke test flow
+    - no repository/application secrets required
+    - dev `.env` defaults are used (`infra/.env.example` -> `infra/.env` if needed)
+
 ## Run Services in Dev Mode
 Bring local compose stack up/down:
 

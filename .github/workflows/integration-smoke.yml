@@ -1,0 +1,27 @@
+name: Integration Smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *"
+
+jobs:
+  integration-smoke:
+    runs-on: ubuntu-latest
+    env:
+      SKIP_GPU_TESTS: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.5.31"
+      - name: Install deps
+        run: uv sync --group runtime-retrieval-api --group runtime-minimal-slice --group dev --locked
+      - name: Run integration smoke tests (CPU, synthetic data, no secrets)
+        run: make test-integration-smoke

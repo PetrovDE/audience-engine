@@ -17,6 +17,7 @@ from .config import (
     COMM_HISTORY_PATH,
     EMBED_SPEC_PATH,
     EXPORT_PATH,
+    FEATURE_SLICE_SOURCE,
     FEATURE_MART_PATH,
     FEATURE_SET_PATH,
     GOVERNANCE_DIR,
@@ -36,6 +37,7 @@ from .feature_mart import build_feature_mart_snapshot
 from .policy_engine import evaluate_policy
 from .qdrant_index import create_or_replace_index
 from .retrieval import retrieve_similar
+from .storage import minio_is_configured, upload_export_to_minio
 from .synthetic_data import generate_synthetic_data
 
 
@@ -212,7 +214,10 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
     bundle = _build_and_validate_bundle(campaign_id=campaign_id or str(uuid4()))
     generated = generate_synthetic_data(customer_count=200, seed=7)
     feature_mart_path = build_feature_mart_snapshot(
-        raw_path=generated["raw"], output_path=FEATURE_MART_PATH
+        raw_path=generated["raw"],
+        output_path=FEATURE_MART_PATH,
+        source_mode=FEATURE_SLICE_SOURCE,
+        run_id=bundle.run_id,
     )
     embeddings_path, vector_size = build_embeddings(feature_mart_path=feature_mart_path)
     index_meta = create_or_replace_index(
@@ -262,6 +267,11 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
         ],
     }
     export_path = export_approved(policy_result=export_ready, output_path=EXPORT_PATH)
+    export_minio_uri = (
+        upload_export_to_minio(export_path=export_path, run_id=bundle.run_id)
+        if minio_is_configured()
+        else None
+    )
     run_ts = datetime.now(timezone.utc).isoformat()
     run_row, selected_rows, rejection_rows = _build_audit_rows(
         retrieved=retrieved,
@@ -295,6 +305,7 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
         },
         "policy": policy_result["summary"],
         "export_path": str(export_path),
+        "export_minio_uri": export_minio_uri,
         "audit": {
             "postgres": {
                 "run_table": "audience_run",

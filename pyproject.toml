@@ -13,12 +13,16 @@ runtime-retrieval-api = [
   "uvicorn==0.35.0",
 ]
 runtime-minimal-slice = [
+  "clickhouse-connect==0.8.18",
   "langchain==0.3.27",
   "langchain-ollama==0.3.8",
+  "minio==7.2.18",
+  "pyarrow==21.0.0",
   "prometheus-client==0.22.1",
   "psycopg[binary]==3.2.9",
   "pyyaml==6.0.2",
   "qdrant-client==1.15.1",
+  "redis==6.4.0",
 ]
 dev = [
   "mypy==1.17.1",

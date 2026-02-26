@@ -49,3 +49,54 @@ POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
 POSTGRES_DB = os.getenv("POSTGRES_DB", "audience_engine")
 POSTGRES_USER = os.getenv("POSTGRES_USER", "audience_engine")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "change_me")
+
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "localhost:9001")
+MINIO_ACCESS_KEY = os.getenv(
+    "MINIO_ACCESS_KEY", os.getenv("MINIO_ROOT_USER", "minioadmin")
+)
+MINIO_SECRET_KEY = os.getenv(
+    "MINIO_SECRET_KEY",
+    os.getenv("MINIO_ROOT_PASSWORD", "change_me_please"),
+)
+MINIO_SECURE = os.getenv("MINIO_SECURE", "0").lower() in {"1", "true", "yes"}
+MINIO_BUCKET = os.getenv("MINIO_BUCKET", "audience-engine")
+MINIO_FEATURE_MART_PREFIX = os.getenv(
+    "MINIO_FEATURE_MART_PREFIX", "minimal_slice/feature_mart"
+)
+MINIO_EXPORT_PREFIX = os.getenv("MINIO_EXPORT_PREFIX", "minimal_slice/exports")
+
+FEATURE_SLICE_SOURCE = os.getenv("FEATURE_SLICE_SOURCE", "snapshot")
+
+CLICKHOUSE_HOST = os.getenv("CLICKHOUSE_HOST", "localhost")
+CLICKHOUSE_PORT = int(os.getenv("CLICKHOUSE_PORT", "8123"))
+CLICKHOUSE_DB = os.getenv("CLICKHOUSE_DB", "audience_engine")
+CLICKHOUSE_USER = os.getenv("CLICKHOUSE_USER", "audience_engine")
+CLICKHOUSE_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "change_me")
+CLICKHOUSE_FEATURE_SLICE_QUERY = os.getenv(
+    "CLICKHOUSE_FEATURE_SLICE_QUERY",
+    (
+        "SELECT customer_id, customer_age_years, customer_tenure_months, "
+        "credit_score_band, delinquency_12m_count, utilization_ratio_avg_3m, "
+        "card_spend_total_3m, digital_engagement_score, is_employee_flag, "
+        "do_not_contact_flag, opt_out_flag, legal_suppression_flag, "
+        "region_code, segment_id, product_line "
+        "FROM feature_mart_snapshot"
+    ),
+)
+CLICKHOUSE_FEATURE_SLICE_LIMIT = int(os.getenv("CLICKHOUSE_FEATURE_SLICE_LIMIT", "5000"))
+
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_DB = int(os.getenv("REDIS_DB", "0"))
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
+REDIS_EMBEDDING_CACHE_ENABLED = os.getenv("REDIS_EMBEDDING_CACHE_ENABLED", "1").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+REDIS_EMBEDDING_CACHE_PREFIX = os.getenv(
+    "REDIS_EMBEDDING_CACHE_PREFIX", "ae:emb_cache"
+)
+REDIS_EMBEDDING_CACHE_TTL_SECONDS = int(
+    os.getenv("REDIS_EMBEDDING_CACHE_TTL_SECONDS", "86400")
+)

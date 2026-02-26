@@ -31,6 +31,7 @@ def test_build_version_bundle_sets_required_fields():
     assert bundle.fs_version == "fs_credit_v1"
     assert bundle.policy_version == "policy_credit_v1"
     assert bundle.emb_version == "fs_credit_v1+prompt_credit_v1+nomic-embed-text"
+    assert bundle.index_alias == "audience-serving"
     assert bundle.concrete_qdrant_collection.startswith("audience-serving-fs_credit_v1-")
     UUID(bundle.run_id)
 
@@ -38,6 +39,18 @@ def test_build_version_bundle_sets_required_fields():
 def test_preflight_fails_when_version_is_missing():
     bundle = replace(_bundle(), policy_version="")
     with pytest.raises(ValueError, match="missing required values"):
+        preflight_version_bundle(
+            bundle=bundle,
+            embedding_spec_path=EMBEDDING_SPEC_PATH,
+            policy_registry_path=POLICY_REGISTRY_PATH,
+            feature_registry_path=FEATURE_REGISTRY_PATH,
+            logged_fields={"customer_id", "fs_version"},
+        )
+
+
+def test_preflight_fails_when_run_id_is_not_uuid():
+    bundle = replace(_bundle(), run_id="not-a-uuid")
+    with pytest.raises(ValueError, match="run_id must be a valid UUID"):
         preflight_version_bundle(
             bundle=bundle,
             embedding_spec_path=EMBEDDING_SPEC_PATH,

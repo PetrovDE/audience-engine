@@ -8,6 +8,7 @@ import yaml
 from .config import EMBEDDINGS_PATH, EMBED_SPEC_PATH
 from .gpu_guard import ensure_gpu_available
 from .metrics import record_embedding_batch
+from .storage import get_cached_embedding, set_cached_embedding
 
 try:
     from langchain_ollama import OllamaEmbeddings
@@ -45,10 +46,29 @@ def build_embeddings(
     prompt_version = emb_spec["template"]["id"]
     rows = _read_jsonl(feature_mart_path)
     docs = [_render_template(template, row) for row in rows]
+    fs_version = str(rows[0]["fs_version"]) if rows else "unknown"
+    emb_version = f"{fs_version}+{prompt_version}+{ollama_model}"
 
     embedder = OllamaEmbeddings(model=ollama_model)
     start = time.perf_counter()
-    vectors = embedder.embed_documents(docs)
+    vectors: List[List[float]] = []
+    missing_docs: List[str] = []
+    missing_positions: List[int] = []
+    for idx, text in enumerate(docs):
+        cached = get_cached_embedding(emb_version=emb_version, text=text)
+        if cached is None:
+            vectors.append([])
+            missing_docs.append(text)
+            missing_positions.append(idx)
+            continue
+        vectors.append(cached)
+
+    if missing_docs:
+        generated = embedder.embed_documents(missing_docs)
+        for pos, text, vector in zip(missing_positions, missing_docs, generated):
+            vectors[pos] = vector
+            set_cached_embedding(emb_version=emb_version, text=text, vector=vector)
+
     duration_seconds = time.perf_counter() - start
     record_embedding_batch(
         model=ollama_model,
@@ -63,7 +83,7 @@ def build_embeddings(
             payload = {
                 "customer_id": row["customer_id"],
                 "fs_version": row["fs_version"],
-                "emb_version": f"{row['fs_version']}+{prompt_version}+{ollama_model}",
+                "emb_version": emb_version,
                 "policy_version": row["policy_version"],
                 "embedding_text": text,
                 "vector": vector,

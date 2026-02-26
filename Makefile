@@ -6,7 +6,7 @@ PROD_COMPOSE := docker compose --env-file $(ENV_FILE) -f infra/docker-compose.ym
 UV ?= uv
 UV_RUN := $(UV) run
 
-.PHONY: env init bootstrap lint format test test-integration up down restart logs ps config dev-up dev-down prod-up prod-down verify seed build-index validate-index promote-index rollback-index demo minimal-slice retrieval-api
+.PHONY: env init bootstrap lint format test test-unit test-contracts test-integration test-integration-smoke test-integration-gpu up down restart logs ps config dev-up dev-down prod-up prod-down verify seed build-index validate-index promote-index rollback-index demo minimal-slice retrieval-api bench-small bench-medium
 
 env:
 	@if [ ! -f $(ENV_FILE) ]; then cp infra/.env.example $(ENV_FILE); fi
@@ -25,10 +25,22 @@ format:
 	$(UV_RUN) ruff format .
 
 test:
+	$(MAKE) test-unit
+
+test-unit:
 	$(UV_RUN) pytest -q tests/unit
+
+test-contracts:
+	$(UV_RUN) pytest -q tests/contracts
 
 test-integration:
 	$(UV_RUN) pytest -q tests/integration
+
+test-integration-smoke:
+	SKIP_GPU_TESTS=1 $(UV_RUN) pytest -q tests/integration/test_minimal_slice_smoke.py -k cpu
+
+test-integration-gpu:
+	SKIP_GPU_TESTS=0 $(UV_RUN) pytest -q tests/integration/test_minimal_slice_smoke.py -k gpu
 
 dev-up: env
 	$(DEV_COMPOSE) up -d
@@ -85,3 +97,9 @@ minimal-slice:
 
 retrieval-api:
 	$(UV_RUN) python -m uvicorn services.retrieval_api.app:app --host 0.0.0.0 --port 8000
+
+bench-small:
+	$(UV_RUN) python -m pipelines.minimal_slice.benchmark_harness --num-points 100000 --vector-size 384 --num-queries 200 --top-k 20 --batch-size 1000 --seed 42
+
+bench-medium:
+	$(UV_RUN) python -m pipelines.minimal_slice.benchmark_harness --num-points 1000000 --vector-size 384 --num-queries 500 --top-k 20 --batch-size 2000 --seed 42

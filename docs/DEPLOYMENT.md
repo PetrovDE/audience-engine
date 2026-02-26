@@ -71,6 +71,19 @@ cp infra/.env.example infra/.env
 - `AIRFLOW_WEBSERVER_SECRET_KEY`
 - `AIRFLOW_ADMIN_PASSWORD`
 
+4. Set runtime data-path controls for minimal slice storage integration:
+- `FEATURE_SLICE_SOURCE=snapshot` or `FEATURE_SLICE_SOURCE=clickhouse`
+- `MINIO_ENDPOINT` (default `localhost:9001` in dev compose)
+- `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`
+- `MINIO_BUCKET` (default `audience-engine`)
+- `MINIO_FEATURE_MART_PREFIX` (default `minimal_slice/feature_mart`)
+- `MINIO_EXPORT_PREFIX` (default `minimal_slice/exports`)
+- `CLICKHOUSE_FEATURE_SLICE_QUERY` (must return governed feature-mart columns)
+- `CLICKHOUSE_FEATURE_SLICE_LIMIT`
+- `REDIS_EMBEDDING_CACHE_ENABLED=1`
+- `REDIS_EMBEDDING_CACHE_PREFIX` (default `ae:emb_cache`)
+- `REDIS_EMBEDDING_CACHE_TTL_SECONDS`
+
 3. Start stack:
 
 ```bash
@@ -94,6 +107,7 @@ curl -fsS http://localhost:6333/healthz
 curl -fsS http://localhost:8123/ping
 curl -fsS http://localhost:9001/minio/health/live
 curl -fsS http://localhost:11434/api/tags
+docker compose --env-file infra/.env -f infra/docker-compose.dev.yml exec -T redis redis-cli ping
 ```
 
 ### GPU check (inside Ollama container)
@@ -139,6 +153,33 @@ If preflight fails at runtime, use the remediation message from the exception an
 ### Airflow check
 
 Open `http://localhost:8080` and log in with `AIRFLOW_ADMIN_USERNAME` / `AIRFLOW_ADMIN_PASSWORD` from `infra/.env`.
+
+### Data-path integration checks
+
+1. ClickHouse query contract check:
+
+```bash
+docker compose --env-file infra/.env -f infra/docker-compose.dev.yml exec -T clickhouse \
+  clickhouse-client --query "${CLICKHOUSE_FEATURE_SLICE_QUERY:-SELECT 1}"
+```
+
+2. MinIO bucket/object check (after one minimal-slice run):
+
+```bash
+docker compose --env-file infra/.env -f infra/docker-compose.dev.yml exec -T minio \
+  mc ls local/${MINIO_BUCKET:-audience-engine}/minimal_slice
+```
+
+Expected object layout:
+- `minimal_slice/feature_mart/fs_version=<...>/run_id=<...>/snapshot.parquet`
+- `minimal_slice/exports/run_id=<...>/approved_audience.jsonl`
+
+3. Redis embedding cache check (after one embedding run):
+
+```bash
+docker compose --env-file infra/.env -f infra/docker-compose.dev.yml exec -T redis \
+  redis-cli --scan --pattern "${REDIS_EMBEDDING_CACHE_PREFIX:-ae:emb_cache}:*"
+```
 
 ## 6) Production-shaped notes
 

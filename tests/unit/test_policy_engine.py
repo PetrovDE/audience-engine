@@ -312,3 +312,62 @@ def test_policy_unknown_policy_version_errors(tmp_path):
             blacklist_path=tmp_path / "blacklist.txt",
             comm_history_path=tmp_path / "comm_history.jsonl",
         )
+
+
+def test_policy_rule_missing_reason_code_errors(tmp_path):
+    registry_path, reason_codes_path = _policy_registry_and_reasons(tmp_path)
+    with registry_path.open("r", encoding="utf-8") as f:
+        registry = yaml.safe_load(f)
+    registry["policies"][0]["rules"][0]["when_jsonlogic"] = {
+        "==": [{"var": "customer_id"}, "cust_err"]
+    }
+    registry["policies"][0]["rules"][0].pop("reason_code", None)
+    _write_yaml(registry_path, registry)
+
+    with pytest.raises(ValueError, match="missing reason_code"):
+        evaluate_policy(
+            candidates=[{"customer_id": "cust_err"}],
+            policy_version="policy_test_v1",
+            policy_registry_path=registry_path,
+            reason_codes_path=reason_codes_path,
+            blacklist_path=tmp_path / "blacklist.txt",
+            comm_history_path=tmp_path / "comm_history.jsonl",
+        )
+
+
+def test_policy_rule_unknown_reason_code_errors(tmp_path):
+    registry_path, reason_codes_path = _policy_registry_and_reasons(tmp_path)
+    with registry_path.open("r", encoding="utf-8") as f:
+        registry = yaml.safe_load(f)
+    registry["policies"][0]["rules"][0]["when_jsonlogic"] = {
+        "==": [{"var": "customer_id"}, "cust_bad_code"]
+    }
+    registry["policies"][0]["rules"][0]["reason_code"] = "NOT_A_REAL_REASON"
+    _write_yaml(registry_path, registry)
+
+    with pytest.raises(ValueError, match="unknown reason_code"):
+        evaluate_policy(
+            candidates=[{"customer_id": "cust_bad_code"}],
+            policy_version="policy_test_v1",
+            policy_registry_path=registry_path,
+            reason_codes_path=reason_codes_path,
+            blacklist_path=tmp_path / "blacklist.txt",
+            comm_history_path=tmp_path / "comm_history.jsonl",
+        )
+
+
+def test_policy_quota_not_triggered_under_threshold(tmp_path):
+    now = datetime.now(timezone.utc)
+    result = _evaluate(
+        tmp_path,
+        candidates=[{"customer_id": "cust_ok", "score": 0.5}],
+        comm_history_rows=[
+            {
+                "customer_id": "cust_ok",
+                "channel": "email",
+                "contact_ts": (now - timedelta(days=2)).isoformat(),
+            }
+        ],
+    )
+    assert result["summary"]["approved_count"] == 1
+    assert result["summary"]["rejected_count"] == 0
