@@ -3,8 +3,10 @@
 ## Required Read Order Per Task
 1. `docs/REPO_MANIFEST.md`
 2. `docs/ARCHITECTURE_V3.md`
-3. `docs/BUILD_PLAN.md`
-4. Relevant rule files under `.cursor/rules/`
+3. `docs/INDEX.md`
+4. `docs/DOCS_BUNDLE.md`
+5. `docs/BUILD_PLAN.md`
+6. Relevant rule files under `.cursor/rules/`
 
 ## Working Protocol
 - Use milestone-first execution (M0, M1, ...).
@@ -32,6 +34,7 @@ When changing features, embeddings, policies, or index behavior:
 - Campaign/audience runs must persist audit records.
 
 ## Documentation Hygiene
+- Keep `docs/INDEX.md` as the canonical TOC for all docs.
 - Update architecture docs when boundaries or invariants change.
 - Update manifest when repo structure changes.
 - Update build plan when milestone scope or order changes.

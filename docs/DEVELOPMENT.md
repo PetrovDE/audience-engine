@@ -26,6 +26,8 @@ make format
 ```
 
 ## Tests
+This section moved to the canonical testing guide: `docs/TESTING.md`.
+
 Unit tests:
 
 ```bash

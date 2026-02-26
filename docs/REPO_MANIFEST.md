@@ -25,15 +25,23 @@
 - `requirements.txt`
 
 ## Documentation Inventory
+- `docs/INDEX.md`
+- `docs/DOCS_BUNDLE.md`
 - `docs/ARCHITECTURE_V3.md`
+- `docs/AUDIT.md`
+- `docs/BENCHMARKS.md`
 - `docs/BUILD_PLAN.md`
 - `docs/CURSOR_WORKFLOW.md`
 - `docs/DEPLOYMENT.md`
 - `docs/DEVELOPMENT.md`
 - `docs/GAP_REPORT_ARCH_VS_REPO.md`
 - `docs/GOVERNANCE.md`
+- `docs/INDEX_LIFECYCLE.md`
 - `docs/POLICY_ENGINE_SPEC.md`
 - `docs/REPO_MANIFEST.md`
+- `docs/RUNBOOK.md`
+- `docs/SCALE_10M.md`
+- `docs/TESTING.md`
 
 ## CI and Quality
 - `.github/workflows/ci.yml`: lint, unit tests, and integration smoke test.

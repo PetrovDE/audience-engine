@@ -1,7 +1,9 @@
 # Operations Runbook
 
 This document adds operational guidance for the Postgres audit sink.
-For monitoring dashboards and metrics triage, see the root runbook: `RUNBOOK.md`.
+For monitoring dashboards and metrics triage, see the root runbook: `../RUNBOOK.md`.
+Index generation lifecycle SOP moved to `docs/INDEX_LIFECYCLE.md`.
+Host/bootstrap deployment steps moved to `docs/DEPLOYMENT.md`.
 
 ## Audit Sink Bring-up
 1. Start infra:
