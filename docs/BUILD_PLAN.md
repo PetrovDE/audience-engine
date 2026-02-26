@@ -1,4 +1,4 @@
-# Build Plan (Bootstrap)
+# Build Plan
 
 ## Planning Principles
 - Build in milestones with explicit Definition of Done (DoD).
@@ -8,7 +8,7 @@
 
 ## Milestones
 
-### M0: Bootstrap Documentation (Current)
+### M0: Bootstrap Documentation
 Scope:
 - Establish architecture baseline.
 - Establish repository manifest.
@@ -64,7 +64,7 @@ DoD:
 - Audience runs persist all required version references.
 - Functional tests cover suppressions, eligibility, caps, conflicts, and quotas.
 
-### M5: Hardening and Scale Readiness
+### M5: Hardening and Scale Readiness (Current Focus)
 Scope:
 - Performance, resiliency, and observability hardening.
 - Validate operational readiness for at least 10 million customers.
@@ -83,8 +83,6 @@ DoD:
 5. M4 policy gate before any export capability.
 6. M5 only after functional completeness.
 
-## Out of Scope for M0
-- Service code and runtime infra.
-- Database provisioning.
-- Policy execution implementation.
-- Production deployment artifacts.
+## Current Status Notes
+- M0 through M4 baseline artifacts are present in this repository.
+- M5 release-hardening items are tracked in `RELEASE_CHECKLIST.md`.

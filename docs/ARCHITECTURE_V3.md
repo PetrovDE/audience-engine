@@ -2,7 +2,7 @@
 
 ## Purpose
 This document defines the architecture baseline for Audience Engine V3.
-M0 is documentation-only and establishes constraints, boundaries, and version contracts.
+The baseline was established in M0 documentation and remains the source of architectural constraints, boundaries, and version contracts.
 
 ## Product Scope
 Audience Engine is an open-source Bank Customer Ranking and Similarity Platform.
@@ -55,7 +55,7 @@ It supports large-scale retrieval and ranking for campaign audience construction
 - Immutable registries per version.
 - Version bump + changelog required for registry updates.
 
-## M0 Non-Goals
+## Historical M0 Non-Goals
 - No service code implementation.
 - No infrastructure deployment.
 - No schema migration execution.

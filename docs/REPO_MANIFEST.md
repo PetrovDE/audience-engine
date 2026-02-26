@@ -1,35 +1,40 @@
-# Repository Manifest (Bootstrap)
+# Repository Manifest
 
-## Current Repository Inventory
-- `.cursor/rules/00-constitution.mdc`
-- `.cursor/rules/01-workflow.mdc`
-- `.cursor/rules/10-governance.mdc`
-- `.cursor/rules/20-policy-engine.mdc`
-- `README.md`
+## Current Top-Level Inventory
+- `.cursor/`
+- `.github/`
+- `docs/`
+- `governance/`
+- `infra/`
+- `pipelines/`
+- `scripts/`
+- `services/`
+- `tests/`
+- `CODE_OF_CONDUCT.md`
+- `CONTRIBUTING.md`
 - `LICENSE`
+- `Makefile`
+- `PIPELINES.md`
+- `README.md`
+- `RELEASE_CHECKLIST.md`
+- `RELEASE_NOTES_v0.1.0.md`
+- `RUNBOOK.md`
+- `SECURITY.md`
+- `requirements.txt`
 
-## Docs Added in M0
+## Documentation Inventory
 - `docs/ARCHITECTURE_V3.md`
-- `docs/REPO_MANIFEST.md`
 - `docs/BUILD_PLAN.md`
 - `docs/CURSOR_WORKFLOW.md`
-
-## Intended Top-Level Layout (Planned)
-- `docs/` architecture, workflow, governance, runbooks.
-- `governance/` versioned registries and policy artifacts.
-- `services/` deployable service applications.
-- `pipelines/` data, feature, and embedding jobs.
-- `infra/` docker-compose, environment templates, deployment assets.
-- `tests/` unit, integration, performance, and contract tests.
-- `scripts/` operational utilities and local automation.
-
-## Planned Docs (Future)
+- `docs/DEPLOYMENT.md`
 - `docs/GOVERNANCE.md`
-- `docs/POLICY_ENGINE.md`
-- `docs/INDEX_LIFECYCLE.md`
-- `docs/RUNBOOKS/` operational procedures.
+- `docs/POLICY_ENGINE_SPEC.md`
+- `docs/REPO_MANIFEST.md`
+
+## CI and Quality
+- `.github/workflows/ci.yml`: lint, unit tests, and integration smoke test.
 
 ## Manifest Rules
-- Update this manifest when top-level structure changes.
-- Reference new governed registries and version artifacts as they are introduced.
-- Keep this file concise and implementation-agnostic.
+- Keep this file aligned with repository structure and release artifacts.
+- Update this manifest when top-level files/directories or critical workflows change.
+- Keep entries concise and implementation-agnostic.
