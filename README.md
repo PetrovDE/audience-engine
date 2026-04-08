@@ -41,6 +41,7 @@ Prereqs:
 - Python 3.11+
 - `uv`
 - Docker + Docker Compose
+- External Ollama runtime (default endpoint for host-run commands: `http://localhost:11434`)
 
 From repo root:
 

@@ -13,6 +13,7 @@ The pack is documentation and contract oriented only; no runtime services are im
 Required version contracts:
 - `fs_version`
 - `emb_version` (composed from `fs_version + prompt_version + model_version`)
+- `model_version` (runtime embedding model identifier)
 - `policy_version`
 - `index_alias`
 - `concrete_qdrant_collection` (index generation target)
@@ -23,6 +24,7 @@ Required version contracts:
 Runtime pipelines and services must exchange a single `VersionBundle` object containing:
 - `fs_version`
 - `emb_version`
+- `model_version`
 - `policy_version`
 - `index_alias`
 - `concrete_qdrant_collection`
@@ -35,8 +37,16 @@ This bundle is the required lineage envelope for indexing, retrieval context, an
 Before embedding/indexing/export, runtime must fail fast when:
 1. Any `VersionBundle` field is missing or invalid (`run_id` must be UUID).
 2. Embedding spec `composition.fs_version` does not match bundle `fs_version`.
-3. Bundle `policy_version` is not present in `governance/policies/policy_registry.yaml`.
-4. Any PII-tagged feature (`pii != none` in `feature_registry`) would be embedded or logged.
+3. Embedding spec `composition.prompt_version` must match runtime prompt id.
+4. Embedding spec `composition.model_version` must match runtime embedding model config.
+5. Bundle `emb_version` must exactly match `fs_version + prompt_version + model_version`.
+6. Bundle `policy_version` is not present in `governance/policies/policy_registry.yaml`.
+7. Any PII-tagged feature (`pii != none` in `feature_registry`) would be embedded or logged.
+
+Additionally, minimal-slice runtime validates the full produced embeddings artifact before index build/export:
+- every row must contain `emb_version`,
+- all rows must have the same `emb_version`,
+- the artifact `emb_version` must equal the preflighted `VersionBundle` `emb_version`.
 
 ## Deterministic Qdrant Point IDs
 - Qdrant point IDs must be deterministic across runs and processes.
@@ -48,11 +58,12 @@ Before embedding/indexing/export, runtime must fail fast when:
 ## File Map
 - `governance/features/feature_registry.yaml`: canonical feature metadata, PII classification, embedding allowlist flags.
 - `governance/features/feature_sets/fs_credit_v1.yaml`: governed feature set for baseline credit audiences.
-- `governance/embeddings/embedding_specs/emb_llm_v1.yaml`: embedding contract and template constraints.
+- `governance/embeddings/embedding_specs/emb_llm_v1.yaml`: historical embedding contract (model_version=`text-embedding-3-large`).
+- `governance/embeddings/embedding_specs/emb_llm_v2.yaml`: active embedding contract for minimal slice runtime (model_version=`nomic-embed-text`).
 - `governance/policies/policy_registry.yaml`: versioned policy definitions and reason-code bindings.
 - `governance/contracts/raw.yaml`: raw ingestion schema contract.
 - `governance/contracts/feature_mart.yaml`: transformed feature mart schema contract.
-- `governance/dictionaries/reason_codes.yaml`: policy outcome reason-code dictionary.
+- `governance/dictionaries/reason_codes.yaml`: versioned policy outcome reason-code dictionary (single-registry with changelog entries per semantic change).
 
 ## Change Management
 - Registries and contracts are immutable by version.

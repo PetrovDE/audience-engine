@@ -2,6 +2,7 @@ from pipelines.minimal_slice import gpu_guard
 
 
 def test_ensure_gpu_available_fails_without_torch_or_nvidia(monkeypatch):
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434")
     monkeypatch.setattr(gpu_guard, "_torch_cuda_available", lambda: False)
     monkeypatch.setattr(gpu_guard, "_nvidia_smi_reports_gpu", lambda: False)
 
@@ -17,12 +18,21 @@ def test_ensure_gpu_available_fails_without_torch_or_nvidia(monkeypatch):
 
 
 def test_ensure_gpu_available_passes_with_torch_cuda(monkeypatch):
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434")
     monkeypatch.setattr(gpu_guard, "_torch_cuda_available", lambda: True)
     monkeypatch.setattr(gpu_guard, "_nvidia_smi_reports_gpu", lambda: False)
     gpu_guard.ensure_gpu_available("Embedding jobs/services")
 
 
 def test_ensure_gpu_available_passes_with_nvidia_smi(monkeypatch):
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434")
     monkeypatch.setattr(gpu_guard, "_torch_cuda_available", lambda: False)
     monkeypatch.setattr(gpu_guard, "_nvidia_smi_reports_gpu", lambda: True)
+    gpu_guard.ensure_gpu_available("Embedding jobs/services")
+
+
+def test_ensure_gpu_available_skips_local_probe_for_external_ollama(monkeypatch):
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+    monkeypatch.setattr(gpu_guard, "_torch_cuda_available", lambda: False)
+    monkeypatch.setattr(gpu_guard, "_nvidia_smi_reports_gpu", lambda: False)
     gpu_guard.ensure_gpu_available("Embedding jobs/services")

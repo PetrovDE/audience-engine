@@ -16,6 +16,20 @@ Out of scope:
 - Infrastructure and deployment details.
 - Data migration execution.
 
+## Current Minimal-Slice Runtime Status (as built)
+Implemented now:
+- Policy evaluation in `pipelines/minimal_slice/policy_engine.py` is runtime-active in the vertical slice.
+- Required input contract is enforced fail-closed for:
+  - `blacklist` (file-based source in minimal slice)
+  - `communication_history` (JSONL source in minimal slice)
+- If a required source is missing/unreadable/invalid, evaluation returns reject decisions with reason code `POLICY_FAIL_CLOSED_REQUIRED_INPUT`.
+- Per-customer decisions are persisted in append-only Postgres table `policy_decision_audit`.
+- Explain/read path exists at retrieval API: `GET /v1/policy/decisions/{run_id}/{customer_id}`.
+
+Still future/partial:
+- Dedicated standalone policy service/API (`POST /v1/policy/evaluate`, `POST /v1/policy/validate`) is still architectural target, not implemented as a separate deployed service.
+- Separate external opt-out dataset ref (`optout_ref`) is not yet first-class in minimal slice; current minimal flow uses candidate payload flags plus required blacklist/history sources.
+
 ## Alignment and Constraints
 This spec inherits Architecture V3 and Governance Pack constraints:
 - Policy Engine is a mandatory production export gate.
@@ -219,11 +233,13 @@ Minimum columns:
 Usage:
 - Frequency caps and conflict checks.
 - Daily/rolling-window quota enforcement.
+- As-built minimal slice marks this source as required and fail-closes on missing/unreadable/invalid content.
 
 ### Dataset quality requirements
 - Freshness SLA: data timestamps must be within policy-configured staleness threshold.
 - Referential integrity: `customer_id` must join against candidate set.
 - Null handling: missing required fields trigger fail-closed behavior when enabled.
+- As-built minimal slice currently enforces structural validity (file presence/readability, required fields, parsable timestamps) and fail-closed behavior; freshness SLA thresholds remain a future enhancement.
 
 ## Audit Model
 
@@ -268,6 +284,9 @@ reasons:
     priority: int
 evaluated_at: timestamp
 ```
+
+As-built storage:
+- Implemented as append-only Postgres table `policy_decision_audit` with lineage fields (`fs_version`, `emb_version`, `model_version`, `policy_version`, `index_alias`, `index_generation`) and JSON explanation payload.
 
 ### Retention and access
 - Retention target: 400 days minimum for production decisions.

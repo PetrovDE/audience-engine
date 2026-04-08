@@ -15,11 +15,15 @@ SUMMARY_PATH = RUN_DIR / "run_summary.json"
 GOVERNANCE_DIR = ROOT / "governance"
 FEATURE_SET_PATH = GOVERNANCE_DIR / "features" / "feature_sets" / "fs_credit_v1.yaml"
 EMBED_SPEC_PATH = (
-    GOVERNANCE_DIR / "embeddings" / "embedding_specs" / "emb_llm_v1.yaml"
+    GOVERNANCE_DIR / "embeddings" / "embedding_specs" / "emb_llm_v2.yaml"
 )
 REASON_CODES_PATH = GOVERNANCE_DIR / "dictionaries" / "reason_codes.yaml"
+EMBEDDING_MODEL_VERSION = os.getenv(
+    "EMBEDDING_MODEL_VERSION", "nomic-embed-text"
+)
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
-QDRANT_URL = "http://localhost:6333"
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_ALIAS = "audience-serving"
 QDRANT_BLUE_COLLECTION = "audience-credit-v1-blue"
 QDRANT_UPSERT_BATCH_SIZE = max(1, int(os.getenv("QDRANT_UPSERT_BATCH_SIZE", "256")))

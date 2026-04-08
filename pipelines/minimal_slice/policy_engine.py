@@ -1,5 +1,4 @@
-import json
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Set
@@ -7,29 +6,16 @@ from typing import Any, Dict, Iterable, List, Set
 import yaml
 
 from .metrics import record_policy_reject_reason
+from .policy_inputs import (
+    OPTIONAL_POLICY_INPUTS,
+    POLICY_FAIL_CLOSED_REQUIRED_INPUT_REASON,
+    REQUIRED_POLICY_INPUTS,
+    load_policy_runtime_inputs,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_POLICY_REGISTRY_PATH = ROOT / "governance" / "policies" / "policy_registry.yaml"
 DEFAULT_REASON_CODES_PATH = ROOT / "governance" / "dictionaries" / "reason_codes.yaml"
-
-
-def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
-    rows: List[Dict[str, Any]] = []
-    if not path.exists():
-        return rows
-    with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                rows.append(json.loads(line))
-    return rows
-
-
-def _read_blacklist(path: Path) -> Set[str]:
-    if not path.exists():
-        return set()
-    with path.open("r", encoding="utf-8") as f:
-        return {line.strip() for line in f if line.strip()}
 
 
 def _parse_ts(value: Any) -> datetime | None:
@@ -174,14 +160,87 @@ def _load_policy(policy_version: str, policy_registry_path: Path) -> Dict[str, A
     )
 
 
-def _history_by_customer(comm_history_path: Path) -> Dict[str, List[Dict[str, Any]]]:
-    rows = _read_jsonl(comm_history_path)
-    grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-    for row in rows:
-        cid = row.get("customer_id")
-        if cid:
-            grouped[str(cid)].append(row)
-    return grouped
+def _decision_input_facts(context: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "is_blacklisted": bool(context.get("is_blacklisted", False)),
+        "opt_out_flag": bool(context.get("opt_out_flag", False)),
+        "legal_suppression_flag": bool(context.get("legal_suppression_flag", False)),
+        "is_employee_flag": bool(context.get("is_employee_flag", False)),
+        "customer_tenure_months": int(context.get("customer_tenure_months", 0)),
+        "delinquency_12m_count": int(context.get("delinquency_12m_count", 0)),
+        "contacts_last_7d": int(context.get("contacts_last_7d", 0)),
+        "contacts_last_30d": int(context.get("contacts_last_30d", 0)),
+        "contacts_last_90d": int(context.get("contacts_last_90d", 0)),
+        "cooldown_after_refusal_active": bool(
+            context.get("cooldown_after_refusal_active", False)
+        ),
+        "campaign_conflict_active": bool(context.get("campaign_conflict_active", False)),
+    }
+
+
+def _fail_closed_result(
+    *,
+    candidates: List[Dict[str, Any]],
+    policy_version: str,
+    reason_dict: Dict[str, Dict[str, str]],
+    input_status: Dict[str, Any],
+    requested_size: int | None,
+) -> Dict[str, Any]:
+    reason_meta = reason_dict.get(
+        POLICY_FAIL_CLOSED_REQUIRED_INPUT_REASON,
+        {
+            "class": "system",
+            "message": (
+                "Required policy input source unavailable/unreadable/invalid; "
+                "evaluation failed closed."
+            ),
+        },
+    )
+    reason_counts: Counter[str] = Counter()
+    results: List[Dict[str, Any]] = []
+    for item in candidates:
+        reason_counts[POLICY_FAIL_CLOSED_REQUIRED_INPUT_REASON] += 1
+        record_policy_reject_reason(POLICY_FAIL_CLOSED_REQUIRED_INPUT_REASON)
+        customer_id = str(item.get("customer_id", ""))
+        results.append(
+            {
+                "customer_id": customer_id,
+                "decision": "reject",
+                "reasons": [
+                    {
+                        "reason_code": POLICY_FAIL_CLOSED_REQUIRED_INPUT_REASON,
+                        "reason_class": reason_meta["class"],
+                        "message": reason_meta["message"],
+                        "rule_id": "system.fail_closed.required_input",
+                        "priority": 0,
+                    }
+                ],
+                "score": float(item.get("score", 0.0)),
+                "selected": False,
+                "explanation": {
+                    "evaluation_mode": "fail_closed_required_inputs",
+                    "input_validation": input_status,
+                },
+            }
+        )
+    return {
+        "policy_version": policy_version,
+        "status": "failed_closed",
+        "input_validation": input_status,
+        "summary": {
+            "status": "failed_closed",
+            "fail_closed": True,
+            "total_candidates": len(results),
+            "approved_count": 0,
+            "rejected_count": len(results),
+            "reject_reason_counts": dict(reason_counts),
+            "requested_size": requested_size,
+            "selected_count": 0,
+        },
+        "rejection_summary": dict(reason_counts),
+        "selected": [],
+        "results": results,
+    }
 
 
 def _build_candidate_context(
@@ -276,8 +335,28 @@ def evaluate_policy(
         key=lambda r: (int(r.get("priority", 1000)), str(r.get("id", ""))),
     )
 
-    blacklist = _read_blacklist(blacklist_path)
-    history = _history_by_customer(comm_history_path)
+    runtime_inputs = load_policy_runtime_inputs(
+        blacklist_path=blacklist_path,
+        comm_history_path=comm_history_path,
+    )
+    input_validation = {
+        "status": runtime_inputs.status,
+        "required_inputs": list(REQUIRED_POLICY_INPUTS),
+        "optional_inputs": list(OPTIONAL_POLICY_INPUTS),
+        "source_status": runtime_inputs.source_status,
+        "errors": runtime_inputs.errors,
+    }
+    if runtime_inputs.status != "ready":
+        return _fail_closed_result(
+            candidates=candidates,
+            policy_version=policy_version,
+            reason_dict=reason_dict,
+            input_status=input_validation,
+            requested_size=requested_size,
+        )
+
+    blacklist = runtime_inputs.blacklist
+    history = runtime_inputs.history_by_customer
     now_ts = datetime.now(timezone.utc)
     conflicts = conflicting_campaign_ids or set()
 
@@ -297,6 +376,7 @@ def evaluate_policy(
             refusal_cooldown_days=refusal_cooldown_days,
         )
         reasons: List[Dict[str, Any]] = []
+        matched_rules: List[Dict[str, Any]] = []
         for rule in rules:
             expr = _normalize_rule_expr(
                 rule.get("when_jsonlogic", rule.get("when"))
@@ -314,12 +394,21 @@ def evaluate_policy(
                 raise ValueError(
                     f"Rule '{rule.get('id')}' references unknown reason_code '{reason_code}'"
                 )
+            priority = int(rule.get("priority", 1000))
             reasons.append(
                 {
                     "reason_code": reason_code,
                     "reason_class": reason_dict[reason_code]["class"],
                     "message": reason_dict[reason_code]["message"],
                     "rule_id": rule.get("id", ""),
+                    "priority": priority,
+                }
+            )
+            matched_rules.append(
+                {
+                    "rule_id": rule.get("id", ""),
+                    "priority": priority,
+                    "reason_code": reason_code,
                 }
             )
             if rule.get("stop_on_match", False):
@@ -336,6 +425,11 @@ def evaluate_policy(
             "decision": decision,
             "reasons": reasons,
             "score": float(item.get("score", 0.0)),
+            "explanation": {
+                "evaluation_mode": "rules",
+                "input_facts": _decision_input_facts(context),
+                "matched_rules": matched_rules,
+            },
         }
         results.append(result_row)
         if decision == "approve":
@@ -352,7 +446,11 @@ def evaluate_policy(
     approved_count = len(results) - rejected_count
     return {
         "policy_version": policy_version,
+        "status": "ok",
+        "input_validation": input_validation,
         "summary": {
+            "status": "ok",
+            "fail_closed": False,
             "total_candidates": len(results),
             "approved_count": approved_count,
             "rejected_count": rejected_count,

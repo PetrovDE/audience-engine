@@ -2,9 +2,15 @@ import time
 from typing import Dict, List, Optional, Sequence
 
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import FieldCondition, Filter, MatchAny, MatchValue, Range
+from qdrant_client.http.models import (
+    FieldCondition,
+    Filter,
+    MatchAny,
+    MatchValue,
+    Range,
+)
 
-from .config import QDRANT_ALIAS, QDRANT_URL
+from .config import OLLAMA_BASE_URL, QDRANT_ALIAS, QDRANT_URL
 from .gpu_guard import ensure_gpu_available
 from .metrics import observe_retrieval_latency
 
@@ -161,7 +167,7 @@ def retrieve_similar(
             query_vector = matches[0].vector
         else:
             ensure_gpu_available("Embedding jobs/services")
-            embedder = OllamaEmbeddings(model=ollama_model)
+            embedder = OllamaEmbeddings(model=ollama_model, base_url=OLLAMA_BASE_URL)
             query_vector = embedder.embed_query(query_text or "")
 
         hits = client.search(

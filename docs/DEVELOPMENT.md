@@ -75,9 +75,14 @@ Workflows are defined under `.github/workflows`:
 Bring local compose stack up/down:
 
 ```bash
-make up
-make down
+make dev-up          # core data services
+make dev-up-airflow
+make dev-up-observability
+make dev-up-full
+make dev-down
 ```
+
+`OLLAMA_BASE_URL` is externalized. For Dockerized components, default is `http://host.docker.internal:11434`; for host-run commands, use `http://localhost:11434`.
 
 Run retrieval API locally:
 

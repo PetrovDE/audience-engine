@@ -22,6 +22,7 @@ Canonical references:
 Version lineage is carried as a single `VersionBundle` object:
 - `fs_version`
 - `emb_version` (`fs_version + prompt_version + model_version`)
+- `model_version`
 - `policy_version`
 - `index_alias`
 - `concrete_qdrant_collection`
@@ -30,7 +31,9 @@ Version lineage is carried as a single `VersionBundle` object:
 
 Runtime generation:
 - Built in `pipelines/version_bundle.py` via `build_version_bundle(...)`.
-- Validated with `preflight_version_bundle(...)` against embedding spec, policy registry, and PII/no-allowlist violations before downstream steps.
+- Validated with `preflight_version_bundle(...)` against embedding spec/runtime parity, policy registry, and PII/no-allowlist violations before downstream steps.
+- Runtime validates the full generated embeddings artifact: every row must carry `emb_version`, mixed values are rejected, and the artifact `emb_version` must equal the preflighted bundle before index build.
+- Active minimal-slice embedding spec: `governance/embeddings/embedding_specs/emb_llm_v2.yaml` (`emb_llm_v1.yaml` retained as historical contract).
 
 Canonical reference:
 - [GOVERNANCE.md](GOVERNANCE.md)
@@ -43,6 +46,7 @@ Canonical reference:
 - Retrieval/policy intermediate data: in-memory pipeline payloads.
 - Export: local `approved_audience.jsonl` plus optional MinIO object upload.
 - Audit sink: Postgres append-only tables (`audience_run`, `audience_run_selected`, `audience_run_rejections_summary`).
+- Policy decision audit: Postgres append-only table (`policy_decision_audit`) with one row per evaluated customer.
 - Optional source/cache stores: ClickHouse (feature slice source), Redis (embedding cache).
 
 Canonical references:
@@ -57,8 +61,11 @@ Canonical references:
 4. Index: Qdrant collection generation is built and targeted by alias context.
 5. Recommend: similarity retrieval generates ranked candidates.
 6. Policy: policy checks approve/reject and emit reason codes (`policy_version`).
+  - Required policy inputs in minimal slice: `blacklist`, `communication_history`.
+  - Missing/unreadable/invalid required input triggers fail-closed rejection with reason code `POLICY_FAIL_CLOSED_REQUIRED_INPUT`.
 7. Export: approved audience rows are written to output.
 8. Audit: run summary plus Postgres append-only audit records are persisted.
+9. Explain/read: retrieval API exposes `GET /v1/policy/decisions/{run_id}/{customer_id}` from audit storage.
 
 Flow command:
 ```bash
@@ -76,6 +83,7 @@ Policy updates:
 - Treat `governance/policies/policy_registry.yaml` as versioned/immutable-by-version.
 - Bump `policy_version` for semantic changes.
 - Keep reason code bindings aligned with `governance/dictionaries/reason_codes.yaml`.
+- For semantic reason-code changes, bump dictionary `version` and append a `changelog` entry.
 
 Audit operations:
 - Keep audit tables append-only.
@@ -109,6 +117,7 @@ Expected demo outputs:
   - `audience_run`
   - `audience_run_selected`
   - `audience_run_rejections_summary`
+  - `policy_decision_audit`
 
 Smoke tests:
 ```bash

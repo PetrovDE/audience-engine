@@ -25,7 +25,6 @@ from pipelines.minimal_slice.qdrant_index import (
 from pipelines.minimal_slice.retrieval import retrieve_similar
 from pipelines.minimal_slice.synthetic_data import generate_synthetic_data
 
-
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_FILE = ROOT / "infra" / "docker-compose.dev.yml"
 ENV_FILE = ROOT / "infra" / ".env"
@@ -121,6 +120,7 @@ def _write_and_verify_audit_records(
     campaign_id: str,
     version_bundle: dict,
     selected: list[dict],
+    policy_results: list[dict],
     rejection_summary: dict,
 ) -> None:
     with psycopg.connect(_postgres_conninfo()) as conn:
@@ -176,6 +176,47 @@ def _write_and_verify_audit_records(
                     """,
                     (run_id, reason_code, int(rejected_count)),
                 )
+            for row in policy_results:
+                reason_codes = [
+                    r.get("reason_code")
+                    for r in row.get("reasons", [])
+                    if r.get("reason_code")
+                ]
+                cur.execute(
+                    """
+                    INSERT INTO policy_decision_audit (
+                        run_id,
+                        campaign_id,
+                        customer_id,
+                        decision,
+                        reason_codes,
+                        policy_version,
+                        fs_version,
+                        emb_version,
+                        model_version,
+                        index_alias,
+                        index_generation,
+                        decision_ts,
+                        decision_explanation
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), %s::jsonb
+                    )
+                    """,
+                    (
+                        run_id,
+                        campaign_id,
+                        row.get("customer_id"),
+                        row.get("decision", "reject"),
+                        reason_codes,
+                        version_bundle["policy_version"],
+                        version_bundle["fs_version"],
+                        version_bundle["emb_version"],
+                        version_bundle["model_version"],
+                        version_bundle["index_alias"],
+                        version_bundle["concrete_qdrant_collection"],
+                        json.dumps(row.get("explanation", {})),
+                    ),
+                )
 
             cur.execute("SELECT count(*) FROM audience_run WHERE run_id = %s", (run_id,))
             run_count = int(cur.fetchone()[0])
@@ -191,11 +232,20 @@ def _write_and_verify_audit_records(
                 (run_id,),
             )
             rejection_count = int(cur.fetchone()[0])
+            cur.execute(
+                """
+                SELECT count(*) FROM policy_decision_audit
+                WHERE run_id = %s
+                """,
+                (run_id,),
+            )
+            decision_count = int(cur.fetchone()[0])
         conn.commit()
 
     assert run_count == 1
     assert selected_count == len(selected)
     assert rejection_count == len(rejection_summary)
+    assert decision_count == len(policy_results)
 
 
 def test_minimal_slice_smoke_cpu_no_gpu_required():
@@ -286,6 +336,7 @@ def test_minimal_slice_smoke_cpu_no_gpu_required():
         version_bundle = {
             "fs_version": "fs_credit_v1",
             "emb_version": "fs_credit_v1+prompt_credit_v1+cpu-mock-embed-v1",
+            "model_version": "cpu-mock-embed-v1",
             "policy_version": config.POLICY_VERSION,
             "index_alias": config.QDRANT_ALIAS,
             "concrete_qdrant_collection": build_meta["collection"],
@@ -297,6 +348,7 @@ def test_minimal_slice_smoke_cpu_no_gpu_required():
             campaign_id="smoke-campaign",
             version_bundle=version_bundle,
             selected=policy_result.get("selected", []),
+            policy_results=policy_result.get("results", []),
             rejection_summary=policy_result.get("rejection_summary", {}),
         )
     finally:

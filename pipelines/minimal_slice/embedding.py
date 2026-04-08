@@ -5,7 +5,12 @@ from typing import Dict, List, Tuple
 
 import yaml
 
-from .config import EMBEDDINGS_PATH, EMBED_SPEC_PATH
+from .config import (
+    EMBED_SPEC_PATH,
+    EMBEDDING_MODEL_VERSION,
+    EMBEDDINGS_PATH,
+    OLLAMA_BASE_URL,
+)
 from .gpu_guard import ensure_gpu_available
 from .metrics import record_embedding_batch
 from .storage import get_cached_embedding, set_cached_embedding
@@ -35,7 +40,7 @@ def _render_template(template: str, row: Dict) -> str:
 def build_embeddings(
     feature_mart_path: Path,
     output_path: Path = EMBEDDINGS_PATH,
-    ollama_model: str = "nomic-embed-text",
+    ollama_model: str = EMBEDDING_MODEL_VERSION,
 ) -> Tuple[Path, int]:
     ensure_gpu_available("Embedding jobs/services")
 
@@ -49,7 +54,7 @@ def build_embeddings(
     fs_version = str(rows[0]["fs_version"]) if rows else "unknown"
     emb_version = f"{fs_version}+{prompt_version}+{ollama_model}"
 
-    embedder = OllamaEmbeddings(model=ollama_model)
+    embedder = OllamaEmbeddings(model=ollama_model, base_url=OLLAMA_BASE_URL)
     start = time.perf_counter()
     vectors: List[List[float]] = []
     missing_docs: List[str] = []
@@ -99,3 +104,39 @@ def build_embeddings(
             }
             f.write(json.dumps(payload) + "\n")
     return output_path, dim
+
+
+def read_embeddings_emb_version(embeddings_path: Path) -> str:
+    discovered_versions: set[str] = set()
+    row_count = 0
+    with embeddings_path.open("r", encoding="utf-8") as f:
+        for line_number, line in enumerate(f, start=1):
+            raw = line.strip()
+            if not raw:
+                continue
+            row_count += 1
+            try:
+                row = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    "Embedding artifact contains invalid JSON row: "
+                    f"path={embeddings_path}, line={line_number}, error={exc}"
+                ) from exc
+
+            emb_version = row.get("emb_version")
+            if not emb_version:
+                raise ValueError(
+                    "Embedding row missing emb_version: "
+                    f"path={embeddings_path}, line={line_number}"
+                )
+            discovered_versions.add(str(emb_version))
+
+    if row_count == 0:
+        raise ValueError(f"No embeddings found at {embeddings_path}")
+    if len(discovered_versions) != 1:
+        versions = ", ".join(sorted(discovered_versions))
+        raise ValueError(
+            "Embedding artifact has mixed emb_version values: "
+            f"path={embeddings_path}, versions=[{versions}]"
+        )
+    return next(iter(discovered_versions))

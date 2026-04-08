@@ -32,6 +32,7 @@ It supports large-scale retrieval and ranking for campaign audience construction
 ## Required Version Contracts
 - `fs_version`: Feature Set version.
 - `emb_version`: composed from `fs_version + prompt_version + model_version`.
+- `model_version`: runtime embedding model identifier used in emb_version composition.
 - `policy_version`: policy definition version.
 - Audience and campaign run audit records must include:
   - `fs_version`
@@ -67,7 +68,7 @@ It supports large-scale retrieval and ranking for campaign audience construction
 - Ranking model strategy and calibration workflow.
 - SLO and performance test harness definitions.
 
-## Current Repository Reality (2026-02-26)
+## Current Repository Reality (2026-04-08)
 This section records implementation status against V3 constraints so architecture intent and repository reality stay aligned.
 
 ### Implemented and Present
@@ -79,10 +80,10 @@ This section records implementation status against V3 constraints so architectur
 - Infra presence exists for Postgres, Redis, MinIO, ClickHouse, Qdrant, Airflow, Prometheus, and Grafana.
 
 ### Partially Implemented / Divergent from V3
-- GPU-first is declared in compose for `ollama`, but hard runtime enforcement is not implemented.
+- Ollama is now externalized from compose; runtime enforces local GPU preflight when `OLLAMA_BASE_URL` is local, but does not remotely attest GPU state on external Ollama hosts.
 - Blue/green lifecycle is incomplete in practice: only a blue collection path is implemented, with no retained green generation strategy.
 - Policy Engine behavior does not fully execute `governance/policies/policy_registry.yaml` rules at runtime.
-- Audience run audit output (`data/minimal_slice/run/run_summary.json`) is file-based, not immutable, and does not consistently carry all required version references (`emb_version` is not persisted at run summary level).
+- Audience run audit output (`data/minimal_slice/run/run_summary.json`) is file-based and not immutable; Postgres audit tables are the durable lineage source.
 - Version contracts are present in governance files, but registry-driven validation and strict bump/changelog workflow enforcement are not implemented in runtime checks.
 
 ### Scale and Governance Implications

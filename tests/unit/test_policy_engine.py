@@ -77,6 +77,11 @@ def _policy_registry_and_reasons(tmp_path):
                     "class": "conflict",
                     "message": "conflict",
                 },
+                {
+                    "code": "POLICY_FAIL_CLOSED_REQUIRED_INPUT",
+                    "class": "system",
+                    "message": "required input failure",
+                },
             ],
         },
     )
@@ -195,7 +200,12 @@ def _evaluate(tmp_path, candidates, comm_history_rows=None, blacklist_ids=None, 
     blacklist_path = tmp_path / "blacklist.txt"
     blacklist_path.write_text("\n".join(blacklist_ids or []), encoding="utf-8")
     comm_history_path = tmp_path / "comm_history.jsonl"
-    _write_jsonl(comm_history_path, comm_history_rows or [])
+    normalized_history_rows = []
+    for row in comm_history_rows or []:
+        normalized = dict(row)
+        normalized.setdefault("campaign_id", "campaign_hist")
+        normalized_history_rows.append(normalized)
+    _write_jsonl(comm_history_path, normalized_history_rows)
     return evaluate_policy(
         candidates=candidates,
         policy_version="policy_test_v1",
@@ -324,6 +334,8 @@ def test_policy_rule_missing_reason_code_errors(tmp_path):
     registry["policies"][0]["rules"][0].pop("reason_code", None)
     _write_yaml(registry_path, registry)
 
+    (tmp_path / "blacklist.txt").write_text("", encoding="utf-8")
+    _write_jsonl(tmp_path / "comm_history.jsonl", [])
     with pytest.raises(ValueError, match="missing reason_code"):
         evaluate_policy(
             candidates=[{"customer_id": "cust_err"}],
@@ -345,6 +357,8 @@ def test_policy_rule_unknown_reason_code_errors(tmp_path):
     registry["policies"][0]["rules"][0]["reason_code"] = "NOT_A_REAL_REASON"
     _write_yaml(registry_path, registry)
 
+    (tmp_path / "blacklist.txt").write_text("", encoding="utf-8")
+    _write_jsonl(tmp_path / "comm_history.jsonl", [])
     with pytest.raises(ValueError, match="unknown reason_code"):
         evaluate_policy(
             candidates=[{"customer_id": "cust_bad_code"}],
@@ -371,3 +385,67 @@ def test_policy_quota_not_triggered_under_threshold(tmp_path):
     )
     assert result["summary"]["approved_count"] == 1
     assert result["summary"]["rejected_count"] == 0
+
+
+def test_policy_fail_closed_when_required_blacklist_missing(tmp_path):
+    registry_path, reason_codes_path = _policy_registry_and_reasons(tmp_path)
+    missing_blacklist = tmp_path / "missing_blacklist.txt"
+    comm_history_path = tmp_path / "comm_history.jsonl"
+    _write_jsonl(comm_history_path, [])
+
+    result = evaluate_policy(
+        candidates=[{"customer_id": "cust_missing", "score": 0.42}],
+        policy_version="policy_test_v1",
+        policy_registry_path=registry_path,
+        reason_codes_path=reason_codes_path,
+        blacklist_path=missing_blacklist,
+        comm_history_path=comm_history_path,
+    )
+
+    assert result["status"] == "failed_closed"
+    assert result["summary"]["fail_closed"] is True
+    assert result["summary"]["approved_count"] == 0
+    assert result["summary"]["rejected_count"] == 1
+    assert (
+        result["rejection_summary"]["POLICY_FAIL_CLOSED_REQUIRED_INPUT"] == 1
+    )
+    assert result["input_validation"]["source_status"]["blacklist"]["status"] == "missing"
+    assert result["results"][0]["decision"] == "reject"
+
+
+def test_policy_fail_closed_when_comm_history_invalid(tmp_path):
+    registry_path, reason_codes_path = _policy_registry_and_reasons(tmp_path)
+    blacklist_path = tmp_path / "blacklist.txt"
+    blacklist_path.write_text("", encoding="utf-8")
+    comm_history_path = tmp_path / "comm_history.jsonl"
+    _write_jsonl(comm_history_path, [{"customer_id": "cust_bad"}])
+
+    result = evaluate_policy(
+        candidates=[{"customer_id": "cust_bad"}],
+        policy_version="policy_test_v1",
+        policy_registry_path=registry_path,
+        reason_codes_path=reason_codes_path,
+        blacklist_path=blacklist_path,
+        comm_history_path=comm_history_path,
+    )
+
+    assert result["status"] == "failed_closed"
+    assert result["summary"]["fail_closed"] is True
+    assert (
+        result["input_validation"]["source_status"]["communication_history"]["status"]
+        == "invalid"
+    )
+    assert result["results"][0]["explanation"]["evaluation_mode"] == "fail_closed_required_inputs"
+
+
+def test_policy_success_when_required_inputs_present(tmp_path):
+    result = _evaluate(
+        tmp_path,
+        candidates=[{"customer_id": "cust_ok", "score": 0.8}],
+        blacklist_ids=[],
+        comm_history_rows=[],
+    )
+    assert result["status"] == "ok"
+    assert result["summary"]["fail_closed"] is False
+    assert result["input_validation"]["status"] == "ready"
+    assert result["summary"]["approved_count"] == 1

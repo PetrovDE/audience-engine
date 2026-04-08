@@ -41,6 +41,7 @@ docker compose -f infra/docker-compose.dev.yml exec postgres \
   pg_dump -U "${POSTGRES_USER:-audience_engine}" -d "${POSTGRES_DB:-audience_engine}" \
   --table=audience_run \
   --table=audience_run_selected \
+  --table=policy_decision_audit \
   --table=audience_run_rejections_summary \
   --format=custom \
   --file=/tmp/audience_audit.dump
@@ -65,13 +66,17 @@ docker compose -f infra/docker-compose.dev.yml cp postgres:/tmp/audience_audit.d
      psql -U "${POSTGRES_USER:-audience_engine}" -d "${POSTGRES_DB:-audience_engine}" \
      -c "SELECT 'audience_run' AS table, count(*) FROM audience_run
          UNION ALL SELECT 'audience_run_selected', count(*) FROM audience_run_selected
+         UNION ALL SELECT 'policy_decision_audit', count(*) FROM policy_decision_audit
          UNION ALL SELECT 'audience_run_rejections_summary', count(*) FROM audience_run_rejections_summary;"
    ```
 
 ## Notes
 - Init SQL (`infra/postgres/init/001_audit_sink.sql`) runs only on first database initialization (empty `pgdata` volume).
-- For existing environments, apply `infra/postgres/migrations/001_audit_sink.sql` manually.
+- For existing environments, apply migrations manually:
+  - `infra/postgres/migrations/001_audit_sink.sql`
+  - `infra/postgres/migrations/003_policy_decision_audit.sql`
 - Audit tables are append-only; updates/deletes are rejected by trigger.
+- Policy decision explain endpoint is available at `GET /v1/policy/decisions/{run_id}/{customer_id}` via retrieval API.
 - If `FEATURE_SLICE_SOURCE=clickhouse`, ensure `CLICKHOUSE_FEATURE_SLICE_QUERY` returns all contract columns needed by `governance/contracts/feature_mart.yaml`.
 - If MinIO credentials are unset/invalid, feature-mart Parquet and export uploads fail fast during runtime operations.
 - If Redis cache is unavailable, embedding runs fail; disable cache explicitly with `REDIS_EMBEDDING_CACHE_ENABLED=0` for emergency bypass.

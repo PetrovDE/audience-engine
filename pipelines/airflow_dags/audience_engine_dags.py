@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -14,10 +15,14 @@ from airflow.operators.python import PythonOperator
 from pipelines.minimal_slice.config import EMBEDDINGS_PATH, FEATURE_MART_PATH, RAW_PATH
 from pipelines.minimal_slice.embedding import build_embeddings
 from pipelines.minimal_slice.feature_mart import build_feature_mart_snapshot
-from pipelines.minimal_slice.qdrant_index import create_or_replace_index, switch_alias_to_blue
+from pipelines.minimal_slice.qdrant_index import (
+    create_or_replace_index,
+    switch_alias_to_blue,
+)
 
-
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(
+    os.getenv("AUDIENCE_ENGINE_ROOT", str(Path(__file__).resolve().parents[2]))
+).resolve()
 CONTRACTS_DIR = ROOT / "governance" / "contracts"
 
 

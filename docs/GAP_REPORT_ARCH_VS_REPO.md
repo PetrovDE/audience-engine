@@ -1,14 +1,14 @@
 # Gap Report: Architecture vs Repository
 
-Date: 2026-02-26
+Date: 2026-04-08
 Scope: Compare current repository implementation against `docs/ARCHITECTURE_V3.md` non-negotiable constraints and required platform components.
 
 ## 1) Requirement-by-Requirement Status
 
 ### GPU required, LangChain embeddings, Qdrant default, blue/green alias
 - GPU required: Partial
-  - Evidence: `infra/docker-compose.yml` and `infra/docker-compose.dev.yml` define NVIDIA GPU reservation for `ollama`.
-  - Gap: No runtime startup guard or pipeline preflight that fails when GPU is unavailable.
+  - Evidence: runtime preflight guard exists in `pipelines/minimal_slice/gpu_guard.py` and enforces local GPU checks when `OLLAMA_BASE_URL` is local.
+  - Gap: externalized Ollama hosts are not remotely attested for GPU capability from pipeline runtime.
 - LangChain embeddings: Implemented
   - Evidence: `pipelines/minimal_slice/embedding.py` uses `langchain_ollama.OllamaEmbeddings`.
 - Qdrant default: Implemented

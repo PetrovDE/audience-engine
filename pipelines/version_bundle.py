@@ -13,6 +13,7 @@ import yaml
 class VersionBundle:
     fs_version: str
     emb_version: str
+    model_version: str
     policy_version: str
     index_alias: str
     concrete_qdrant_collection: str
@@ -39,6 +40,7 @@ def _require_versions(bundle: VersionBundle) -> None:
         for field_name in (
             "fs_version",
             "emb_version",
+            "model_version",
             "policy_version",
             "index_alias",
             "concrete_qdrant_collection",
@@ -71,6 +73,7 @@ def build_version_bundle(
     return VersionBundle(
         fs_version=fs_version,
         emb_version=f"{fs_version}+{prompt_version}+{model_version}",
+        model_version=model_version,
         policy_version=policy_version,
         index_alias=index_alias,
         concrete_qdrant_collection=f"{index_alias}-{fs_version}-{run_id[:8]}",
@@ -86,6 +89,8 @@ def preflight_version_bundle(
     policy_registry_path: Path,
     feature_registry_path: Path,
     logged_fields: Iterable[str],
+    runtime_embedding_model: str | None = None,
+    runtime_prompt_version: str | None = None,
 ) -> None:
     _require_versions(bundle)
 
@@ -98,6 +103,37 @@ def preflight_version_bundle(
         raise ValueError(
             "Embedding spec fs_version mismatch: "
             f"spec={spec_fs_version!r}, bundle={bundle.fs_version!r}"
+        )
+
+    spec_prompt_version = emb_spec.get("composition", {}).get("prompt_version")
+    template_prompt_version = emb_spec.get("template", {}).get("id")
+    resolved_runtime_prompt_version = runtime_prompt_version or template_prompt_version
+    if spec_prompt_version != resolved_runtime_prompt_version:
+        raise ValueError(
+            "Embedding spec prompt_version mismatch: "
+            f"spec={spec_prompt_version!r}, runtime={resolved_runtime_prompt_version!r}"
+        )
+
+    resolved_runtime_model = runtime_embedding_model or bundle.model_version
+    spec_model_version = emb_spec.get("composition", {}).get("model_version")
+    if spec_model_version != resolved_runtime_model:
+        raise ValueError(
+            "Embedding spec model_version mismatch: "
+            f"spec={spec_model_version!r}, runtime={resolved_runtime_model!r}"
+        )
+    if bundle.model_version != resolved_runtime_model:
+        raise ValueError(
+            "VersionBundle model_version mismatch: "
+            f"bundle={bundle.model_version!r}, runtime={resolved_runtime_model!r}"
+        )
+
+    expected_emb_version = (
+        f"{bundle.fs_version}+{resolved_runtime_prompt_version}+{resolved_runtime_model}"
+    )
+    if bundle.emb_version != expected_emb_version:
+        raise ValueError(
+            "VersionBundle emb_version composition mismatch: "
+            f"expected={expected_emb_version!r}, bundle={bundle.emb_version!r}"
         )
 
     policy_versions = {

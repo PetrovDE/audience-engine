@@ -9,7 +9,8 @@
   - Redis
   - ClickHouse
   - Qdrant
-- NVIDIA driver + Docker GPU runtime working (embeddings currently enforce GPU preflight).
+- External Ollama endpoint is reachable (`OLLAMA_BASE_URL`, default `http://localhost:11434` for host-run verification).
+- NVIDIA driver + GPU runtime working on the host where Ollama executes embeddings.
 
 ## Exact Commands
 ```bash

@@ -1,189 +1,157 @@
-# Deployment (M3 Infra Skeleton)
+# Deployment
 
-This document describes host prerequisites and bootstrap verification for the Audience Engine infra skeleton.
+This repository provides two Compose stacks:
 
-## 1) NVIDIA Drivers (GPU host)
+- `infra/docker-compose.dev.yml`: local development on Docker Desktop (Windows/Linux/macOS).
+- `infra/docker-compose.yml`: single-node, prod-shaped on-prem deployment.
 
-1. Install a recent NVIDIA driver on each GPU node.
-2. Reboot and verify GPU visibility:
+Both stacks use pinned image versions and **do not run Ollama in Compose**.
 
-```bash
-nvidia-smi
-```
+## 1) Prerequisites
 
-Expected: at least one GPU listed, no driver/runtime errors.
+- Docker Engine + Docker Compose v2.
+- For pipeline/retrieval paths that generate embeddings, an external Ollama runtime must be running.
+- NVIDIA GPU support is still required for embedding workloads; GPU is expected where Ollama runs.
 
-## 2) NVIDIA Container Toolkit
+## 2) Environment Contract
 
-Install NVIDIA container runtime support so Docker can pass GPUs into containers.
-
-Ubuntu/Debian example:
-
-```bash
-curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
-  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
-  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-sudo apt-get update
-sudo apt-get install -y nvidia-container-toolkit
-sudo nvidia-ctk runtime configure --runtime=docker
-sudo systemctl restart docker
-```
-
-Verify Docker GPU passthrough:
-
-```bash
-docker run --rm --gpus all nvidia/cuda:12.4.1-runtime-ubuntu22.04 nvidia-smi
-```
-
-## 3) Disk Layout (recommended)
-
-Keep data paths separated by workload class to reduce noisy-neighbor I/O.
-
-- `/srv/audience-engine/postgres` -> Postgres volume (`pgdata`)
-- `/srv/audience-engine/clickhouse` -> ClickHouse volume (`clickhousedata`)
-- `/srv/audience-engine/qdrant` -> Qdrant storage (`qdrantdata`)
-- `/srv/audience-engine/minio` -> object storage (`miniodata`)
-- `/srv/audience-engine/redis` -> Redis appendonly (`redisdata`)
-- `/srv/audience-engine/ollama` -> model cache (`ollamadata`)
-- `/srv/audience-engine/airflow` -> DAG/log/plugin volumes
-
-Suggested capacity planning baseline:
-
-- Fast SSD/NVMe for Postgres, ClickHouse, Qdrant
-- Large-capacity disk for MinIO and Ollama model cache
-- Keep at least 30% free space to avoid severe compaction/index degradation
-
-If you move from named volumes to host bind mounts, update `infra/docker-compose.yml` and `infra/docker-compose.dev.yml` accordingly.
-
-## 4) Bring-up
-
-1. Copy environment template:
+1. Copy the template:
 
 ```bash
 cp infra/.env.example infra/.env
 ```
 
-2. Set strong secrets in `infra/.env`:
+2. Set secrets before shared/server usage:
+
 - `POSTGRES_PASSWORD`
 - `MINIO_ROOT_PASSWORD`
+- `MINIO_SECRET_KEY`
 - `AIRFLOW_FERNET_KEY`
-- `AIRFLOW_WEBSERVER_SECRET_KEY`
+- `AIRFLOW_API_AUTH_JWT_SECRET`
 - `AIRFLOW_ADMIN_PASSWORD`
+- `GRAFANA_ADMIN_PASSWORD`
 
-4. Set runtime data-path controls for minimal slice storage integration:
-- `FEATURE_SLICE_SOURCE=snapshot` or `FEATURE_SLICE_SOURCE=clickhouse`
-- `MINIO_ENDPOINT` (default `localhost:9001` in dev compose)
-- `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY`
-- `MINIO_BUCKET` (default `audience-engine`)
-- `MINIO_FEATURE_MART_PREFIX` (default `minimal_slice/feature_mart`)
-- `MINIO_EXPORT_PREFIX` (default `minimal_slice/exports`)
-- `CLICKHOUSE_FEATURE_SLICE_QUERY` (must return governed feature-mart columns)
-- `CLICKHOUSE_FEATURE_SLICE_LIMIT`
-- `REDIS_EMBEDDING_CACHE_ENABLED=1`
-- `REDIS_EMBEDDING_CACHE_PREFIX` (default `ae:emb_cache`)
-- `REDIS_EMBEDDING_CACHE_TTL_SECONDS`
+3. Configure external Ollama endpoint:
 
-3. Start stack:
+- Containerized components default to `OLLAMA_BASE_URL=http://host.docker.internal:11434`.
+- Host-run commands can use `OLLAMA_BASE_URL=http://localhost:11434`.
+- `AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS` is pinned in `.env.example` so Airflow containers can import and run repository DAG code.
+
+## 3) Development Stack (Docker Desktop)
+
+### Service profiles
+
+`docker-compose.dev.yml` keeps startup flexible:
+
+- Core services (default): Postgres, Redis, MinIO, ClickHouse, Qdrant.
+- Airflow profile: `airflow-init`, `airflow-api-server`, `airflow-scheduler`, `airflow-dag-processor`, `airflow-triggerer`.
+- Observability profile: Prometheus, Grafana.
+
+### Start commands
+
+Minimal core stack:
 
 ```bash
 make dev-up
 ```
 
-## 5) Verification Steps
-
-### Service status
+Core + Airflow:
 
 ```bash
-make ps
+make dev-up-airflow
 ```
 
-All services should be `Up` / `healthy`.
-
-### Endpoint checks (from host)
+Core + observability:
 
 ```bash
-curl -fsS http://localhost:6333/healthz
-curl -fsS http://localhost:8123/ping
-curl -fsS http://localhost:9001/minio/health/live
+make dev-up-observability
+```
+
+Full local stack:
+
+```bash
+make dev-up-full
+```
+
+Stop everything:
+
+```bash
+make dev-down
+```
+
+### Useful local endpoints
+
+- Postgres: `localhost:${POSTGRES_PORT}`
+- Redis: `localhost:${REDIS_PORT}`
+- MinIO API: `localhost:${MINIO_API_PORT}`
+- MinIO Console: `localhost:${MINIO_CONSOLE_PORT}`
+- ClickHouse HTTP: `localhost:${CLICKHOUSE_PORT}`
+- Qdrant HTTP: `localhost:${QDRANT_PORT}`
+- Airflow API/UI: `localhost:${AIRFLOW_PORT}` (when Airflow profile is enabled)
+- Prometheus: `localhost:${PROMETHEUS_PORT}` (observability profile)
+- Grafana: `localhost:${GRAFANA_PORT}` (observability profile)
+
+## 4) Airflow 3.1.8 Topology
+
+Airflow is modeled with Airflow 3 service boundaries (no Airflow 2 webserver+scheduler shell hack):
+
+- `airflow-init` (one-shot bootstrap): `airflow db migrate` + admin user creation.
+- `airflow-api-server`: `airflow api-server`.
+- `airflow-scheduler`: `airflow scheduler`.
+- `airflow-dag-processor`: `airflow dag-processor`.
+- `airflow-triggerer`: `airflow triggerer`.
+
+Airflow uses Postgres metadata storage and LocalExecutor for this single-node setup.
+For hardened server deployments, bake these Python dependencies into a custom Airflow image instead of runtime pip installation.
+
+## 5) Prod-Shaped Single-Node Deployment
+
+Bring up:
+
+```bash
+make prod-up
+```
+
+Stop:
+
+```bash
+make prod-down
+```
+
+Characteristics of `infra/docker-compose.yml`:
+
+- Exact pinned versions for all services.
+- `restart: always` defaults.
+- One-shot bootstrap separated (`airflow-init`) from steady-state services.
+- Persistent named volumes for all stateful components.
+- Ports bound to `127.0.0.1` for safer single-node defaults.
+- External Ollama endpoint required (`OLLAMA_BASE_URL`), no bundled Ollama container.
+
+For remote/operator access, place a reverse proxy or SSH tunnel in front of localhost-bound ports.
+
+## 6) External Ollama Usage
+
+Example checks:
+
+From host:
+
+```bash
 curl -fsS http://localhost:11434/api/tags
-docker compose --env-file infra/.env -f infra/docker-compose.dev.yml exec -T redis redis-cli ping
 ```
 
-### GPU check (inside Ollama container)
+From containers (for example Airflow):
 
 ```bash
-docker compose --env-file infra/.env -f infra/docker-compose.dev.yml exec -T ollama nvidia-smi
+curl -fsS http://host.docker.internal:11434/api/tags
 ```
 
-Expected: NVIDIA device list visible from inside the container.
+If your Ollama host differs, set `OLLAMA_BASE_URL` accordingly in `infra/.env`.
 
-### Embedding runtime GPU preflight checklist
+## 7) Migration Notes (from old Compose layout)
 
-Embedding jobs/services now fail fast before embedding calls when no GPU is detected.
-
-Run this checklist before `build_embeddings`, minimal-slice flow runs, or retrieval calls that use `query_text`:
-
-1. Host GPU is visible:
-
-```bash
-nvidia-smi
-```
-
-2. Docker GPU passthrough works:
-
-```bash
-docker run --rm --gpus all nvidia/cuda:12.4.1-runtime-ubuntu22.04 nvidia-smi
-```
-
-3. Ollama service container sees GPU:
-
-```bash
-docker compose --env-file infra/.env -f infra/docker-compose.dev.yml exec -T ollama nvidia-smi
-```
-
-4. Optional Python-level check (if `torch` is installed in the runtime):
-
-```bash
-python -c "import torch; print(torch.cuda.is_available())"
-```
-
-If preflight fails at runtime, use the remediation message from the exception and verify NVIDIA driver + NVIDIA Container Toolkit installation steps in sections 1 and 2 of this document.
-
-### Airflow check
-
-Open `http://localhost:8080` and log in with `AIRFLOW_ADMIN_USERNAME` / `AIRFLOW_ADMIN_PASSWORD` from `infra/.env`.
-
-### Data-path integration checks
-
-1. ClickHouse query contract check:
-
-```bash
-docker compose --env-file infra/.env -f infra/docker-compose.dev.yml exec -T clickhouse \
-  clickhouse-client --query "${CLICKHOUSE_FEATURE_SLICE_QUERY:-SELECT 1}"
-```
-
-2. MinIO bucket/object check (after one minimal-slice run):
-
-```bash
-docker compose --env-file infra/.env -f infra/docker-compose.dev.yml exec -T minio \
-  mc ls local/${MINIO_BUCKET:-audience-engine}/minimal_slice
-```
-
-Expected object layout:
-- `minimal_slice/feature_mart/fs_version=<...>/run_id=<...>/snapshot.parquet`
-- `minimal_slice/exports/run_id=<...>/approved_audience.jsonl`
-
-3. Redis embedding cache check (after one embedding run):
-
-```bash
-docker compose --env-file infra/.env -f infra/docker-compose.dev.yml exec -T redis \
-  redis-cli --scan --pattern "${REDIS_EMBEDDING_CACHE_PREFIX:-ae:emb_cache}:*"
-```
-
-## 6) Production-shaped notes
-
-- `infra/docker-compose.yml` intentionally avoids host port publishing by default.
-- Put ingress/reverse-proxy, TLS termination, and auth in front of Airflow/MinIO APIs.
-- Run backups for Postgres, ClickHouse, Qdrant, and MinIO before promoting environments.
-- For real production, split Airflow into dedicated webserver/scheduler/worker services and externalize secrets.
+- Removed `ollama` service from both compose files.
+- Removed `ollamadata` volume.
+- Airflow upgraded from `2.10.5` single-container pattern to Airflow `3.1.8` multi-service architecture.
+- Replaced legacy Airflow 2 API auth env with Airflow 3 API auth/JWT settings.
+- Dev stack now supports partial startup via profiles (`airflow`, `observability`).
+- Prod-shaped stack now uses loopback-only published ports and explicit single-node hardening defaults.

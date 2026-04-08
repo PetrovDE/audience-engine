@@ -3,10 +3,12 @@ SHELL := /bin/sh
 ENV_FILE ?= infra/.env
 DEV_COMPOSE := docker compose --env-file $(ENV_FILE) -f infra/docker-compose.dev.yml
 PROD_COMPOSE := docker compose --env-file $(ENV_FILE) -f infra/docker-compose.yml
+DEV_AIRFLOW_PROFILE := --profile airflow
+DEV_OBSERVABILITY_PROFILE := --profile observability
 UV ?= uv
 UV_RUN := $(UV) run
 
-.PHONY: env init bootstrap lint format test test-unit test-contracts test-integration test-integration-smoke test-integration-gpu up down restart logs ps config dev-up dev-down prod-up prod-down verify verify-health seed build-index validate-index promote-index rollback-index demo minimal-slice retrieval-api bench-small bench-medium
+.PHONY: env init bootstrap lint format test test-unit test-contracts test-integration test-integration-smoke test-integration-gpu up down restart logs ps config dev-up dev-up-airflow dev-up-observability dev-up-full dev-down prod-up prod-down verify verify-health seed build-index validate-index promote-index rollback-index demo minimal-slice retrieval-api bench-small bench-medium
 
 env:
 	@if [ ! -f $(ENV_FILE) ]; then cp infra/.env.example $(ENV_FILE); fi
@@ -45,6 +47,15 @@ test-integration-gpu:
 dev-up: env
 	$(DEV_COMPOSE) up -d
 
+dev-up-airflow: env
+	$(DEV_COMPOSE) $(DEV_AIRFLOW_PROFILE) up -d
+
+dev-up-observability: env
+	$(DEV_COMPOSE) $(DEV_OBSERVABILITY_PROFILE) up -d
+
+dev-up-full: env
+	$(DEV_COMPOSE) $(DEV_AIRFLOW_PROFILE) $(DEV_OBSERVABILITY_PROFILE) up -d
+
 dev-down:
 	$(DEV_COMPOSE) down
 
@@ -71,8 +82,8 @@ config:
 
 verify-health:
 	docker compose --env-file $(ENV_FILE) -f infra/docker-compose.dev.yml ps
-	docker compose --env-file $(ENV_FILE) -f infra/docker-compose.dev.yml exec -T qdrant curl -fsS http://localhost:6333/healthz
-	docker compose --env-file $(ENV_FILE) -f infra/docker-compose.dev.yml exec -T ollama ollama list
+	$(UV_RUN) python -c "import urllib.request; urllib.request.urlopen('http://localhost:6333/healthz', timeout=5)"
+	$(UV_RUN) python -c "import os, urllib.request; base=os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434').rstrip('/'); urllib.request.urlopen(f'{base}/api/tags', timeout=5)"
 
 verify: env
 	$(DEV_COMPOSE) up -d

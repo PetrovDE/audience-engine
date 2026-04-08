@@ -1,26 +1,90 @@
 name: audience-engine
 
+x-service-defaults: &service-defaults
+  restart: always
+
+x-airflow-common-env: &airflow-common-env
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+  AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+  AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+  AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/execution/
+  AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_API_AUTH_JWT_SECRET}
+  AIRFLOW__API_AUTH__JWT_ISSUER: ${AIRFLOW_API_AUTH_JWT_ISSUER}
+  AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+  AIRFLOW_CONFIG: /opt/airflow/config/airflow.cfg
+  AUDIENCE_ENGINE_ROOT: /opt/audience-engine
+  PYTHONPATH: /opt/audience-engine
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: ${POSTGRES_DB}
+  POSTGRES_USER: ${POSTGRES_USER}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  MINIO_ENDPOINT: minio:9000
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+  MINIO_BUCKET: ${MINIO_BUCKET}
+  MINIO_SECURE: ${MINIO_SECURE:-0}
+  CLICKHOUSE_HOST: clickhouse
+  CLICKHOUSE_PORT: "8123"
+  CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+  CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+  CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_DB: ${REDIS_DB:-0}
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  REDIS_EMBEDDING_CACHE_ENABLED: ${REDIS_EMBEDDING_CACHE_ENABLED:-1}
+  QDRANT_URL: http://qdrant:6333
+  QDRANT_ALIAS: ${QDRANT_ALIAS:-audience-serving}
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+  EMBEDDING_MODEL_VERSION: ${EMBEDDING_MODEL_VERSION:-nomic-embed-text}
+  _PIP_ADDITIONAL_REQUIREMENTS: ${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS}
+
+x-airflow-common: &airflow-common
+  <<: *service-defaults
+  image: apache/airflow:3.1.8-python3.11
+  user: "${AIRFLOW_UID}:0"
+  environment:
+    <<: *airflow-common-env
+  volumes:
+    - ../pipelines:/opt/audience-engine/pipelines:ro
+    - ../governance:/opt/audience-engine/governance:ro
+    - ../pipelines/airflow_dags:/opt/airflow/dags:ro
+    - airflowrun:/opt/audience-engine/data
+    - airflowlogs:/opt/airflow/logs
+    - airflowconfig:/opt/airflow/config
+    - airflowplugins:/opt/airflow/plugins
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
 services:
   postgres:
-    image: postgres:16-alpine
-    restart: always
+    <<: *service-defaults
+    image: postgres:16.13-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 5s
 
   redis:
-    image: redis:7-alpine
-    restart: always
+    <<: *service-defaults
+    image: redis:7.4-alpine
     command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -28,96 +92,147 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 5s
 
   minio:
-    image: minio/minio:RELEASE.2025-01-20T14-49-07Z
-    restart: always
+    <<: *service-defaults
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z-cpuv1
     command: server /data --console-address ':9001'
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "127.0.0.1:${MINIO_API_PORT:-9001}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9002}:9001"
     volumes:
       - miniodata:/data
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:9000/minio/health/live"]
+      test: ["CMD-SHELL", "mc alias set local http://localhost:9000 \"$$MINIO_ROOT_USER\" \"$$MINIO_ROOT_PASSWORD\" >/dev/null 2>&1 && mc ready local >/dev/null 2>&1"]
       interval: 15s
       timeout: 5s
       retries: 10
+      start_period: 10s
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24.8
-    restart: always
+    <<: *service-defaults
+    image: clickhouse/clickhouse-server:24.8.14.39
     environment:
       CLICKHOUSE_DB: ${CLICKHOUSE_DB}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+    ports:
+      - "127.0.0.1:${CLICKHOUSE_PORT:-8123}:8123"
+      - "127.0.0.1:${CLICKHOUSE_NATIVE_PORT:-9000}:9000"
     volumes:
       - clickhousedata:/var/lib/clickhouse
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8123/ping"]
+      test: ["CMD-SHELL", "clickhouse-client --host localhost --query 'SELECT 1' >/dev/null 2>&1"]
       interval: 15s
       timeout: 5s
       retries: 10
+      start_period: 15s
 
   qdrant:
-    image: qdrant/qdrant:v1.13.4
-    restart: always
+    <<: *service-defaults
+    image: qdrant/qdrant:v1.17.1
+    ports:
+      - "127.0.0.1:${QDRANT_PORT:-6333}:6333"
+      - "127.0.0.1:${QDRANT_GRPC_PORT:-6334}:6334"
     volumes:
       - qdrantdata:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:6333/healthz"]
+      test: ["CMD-SHELL", "bash -ec '</dev/tcp/127.0.0.1/6333'"]
       interval: 15s
       timeout: 5s
       retries: 10
+      start_period: 10s
 
-  ollama:
-    image: ollama/ollama:0.6.2
-    restart: always
-    volumes:
-      - ollamadata:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-
-  airflow:
-    image: apache/airflow:2.10.5-python3.11
-    restart: always
+  airflow-init:
+    <<: *airflow-common
+    restart: "no"
     depends_on:
       postgres:
         condition: service_healthy
-    user: "${AIRFLOW_UID}:0"
-    environment:
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET_KEY}
-      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
-      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USERNAME}
-      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
-      _AIRFLOW_WWW_USER_EMAIL: ${AIRFLOW_ADMIN_EMAIL}
     command: >
-      bash -lc "airflow db migrate && airflow users create
+      bash -ec "
+      airflow db migrate &&
+      airflow users create
       --username ${AIRFLOW_ADMIN_USERNAME}
       --password ${AIRFLOW_ADMIN_PASSWORD}
       --firstname Admin --lastname User --role Admin
-      --email ${AIRFLOW_ADMIN_EMAIL} || true;
-      airflow webserver & airflow scheduler"
-    volumes:
-      - airflowdags:/opt/airflow/dags
-      - airflogs:/opt/airflow/logs
-      - airflowplugins:/opt/airflow/plugins
+      --email ${AIRFLOW_ADMIN_EMAIL} || true
+      "
+
+  airflow-api-server:
+    <<: *airflow-common
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    command: api-server
+    ports:
+      - "127.0.0.1:${AIRFLOW_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v2/monitor/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  airflow-scheduler:
+    <<: *airflow-common
+    depends_on:
+      airflow-api-server:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    command: scheduler
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8974/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    depends_on:
+      airflow-api-server:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    command: dag-processor
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type DagProcessorJob --hostname \"$$HOSTNAME\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  airflow-triggerer:
+    <<: *airflow-common
+    depends_on:
+      airflow-api-server:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    command: triggerer
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type TriggererJob --hostname \"$$HOSTNAME\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   prometheus:
-    image: prom/prometheus:v3.2.1
-    restart: always
+    <<: *service-defaults
+    image: prom/prometheus:v3.11.1
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheusdata:/prometheus
@@ -125,13 +240,16 @@ services:
       - "host.docker.internal:host-gateway"
 
   grafana:
-    image: grafana/grafana:11.5.2
-    restart: always
+    <<: *service-defaults
+    image: grafana/grafana:12.0.0
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_started
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -143,9 +261,9 @@ volumes:
   miniodata:
   clickhousedata:
   qdrantdata:
-  ollamadata:
-  airflowdags:
-  airflogs:
+  airflowrun:
+  airflowlogs:
+  airflowconfig:
   airflowplugins:
   prometheusdata:
   grafanadata:

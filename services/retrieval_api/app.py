@@ -1,11 +1,13 @@
 import json
 from typing import List, Optional
+from uuid import UUID
 
 from fastapi import FastAPI, HTTPException
 from prometheus_client import make_asgi_app
 from pydantic import BaseModel, Field
 
 from pipelines.minimal_slice.config import SUMMARY_PATH
+from pipelines.minimal_slice.policy_decision_audit import fetch_policy_decision_audit
 from pipelines.minimal_slice.retrieval import retrieve_similar
 from pipelines.version_bundle import VersionBundle
 
@@ -79,3 +81,27 @@ def retrieve(request: RetrieveRequest) -> dict:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return {"count": len(rows), "results": rows}
+
+
+@app.get("/v1/policy/decisions/{run_id}/{customer_id}")
+def get_policy_decision(run_id: str, customer_id: str) -> dict:
+    try:
+        UUID(run_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid run_id format (expected UUID): {run_id}",
+        ) from exc
+    try:
+        decision = fetch_policy_decision_audit(run_id=run_id, customer_id=customer_id)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if decision is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Policy decision not found for run_id={run_id} "
+                f"customer_id={customer_id}"
+            ),
+        )
+    return decision

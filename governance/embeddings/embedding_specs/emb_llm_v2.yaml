@@ -1,12 +1,17 @@
-version: 1
-embedding_spec: emb_llm_v1
-emb_version: emb_llm_v1
+version: 2
+embedding_spec: emb_llm_v2
+emb_version: emb_llm_v2
 owner: ml-platform
-updated_at: 2026-02-26
+updated_at: 2026-04-08
+changelog:
+  - version: 2
+    date: 2026-04-08
+    change: Set composition.model_version to nomic-embed-text for LangChain/Ollama runtime parity.
+    previous_spec: governance/embeddings/embedding_specs/emb_llm_v1.yaml
 composition:
   fs_version: fs_credit_v1
   prompt_version: prompt_credit_v1
-  model_version: text-embedding-3-large
+  model_version: nomic-embed-text
   emb_version_rule: fs_version + prompt_version + model_version
 runtime:
   framework: langchain

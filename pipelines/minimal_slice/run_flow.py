@@ -16,10 +16,11 @@ from .config import (
     BLACKLIST_PATH,
     COMM_HISTORY_PATH,
     EMBED_SPEC_PATH,
+    EMBEDDING_MODEL_VERSION,
     EXPORT_PATH,
-    FEATURE_SLICE_SOURCE,
     FEATURE_MART_PATH,
     FEATURE_SET_PATH,
+    FEATURE_SLICE_SOURCE,
     GOVERNANCE_DIR,
     POLICY_VERSION,
     POSTGRES_DB,
@@ -31,9 +32,13 @@ from .config import (
     RAW_PATH,
     SUMMARY_PATH,
 )
-from .embedding import build_embeddings
+from .embedding import build_embeddings, read_embeddings_emb_version
 from .exporter import export_approved
 from .feature_mart import build_feature_mart_snapshot
+from .policy_decision_audit import (
+    build_policy_decision_audit_rows,
+    write_policy_decision_audit_rows,
+)
 from .policy_engine import evaluate_policy
 from .qdrant_index import create_or_replace_index
 from .retrieval import retrieve_similar
@@ -54,7 +59,7 @@ def _build_and_validate_bundle(campaign_id: str) -> VersionBundle:
         index_alias=QDRANT_ALIAS,
         campaign_id=campaign_id,
         embedding_spec_path=EMBED_SPEC_PATH,
-        model_version="nomic-embed-text",
+        model_version=EMBEDDING_MODEL_VERSION,
     )
     preflight_version_bundle(
         bundle=bundle,
@@ -76,6 +81,7 @@ def _build_and_validate_bundle(campaign_id: str) -> VersionBundle:
             "region_code",
             "segment_id",
         },
+        runtime_embedding_model=EMBEDDING_MODEL_VERSION,
     )
     return bundle
 
@@ -99,7 +105,7 @@ def _build_audit_rows(
     product_id: str,
     channel: str,
     resolved_collection: str,
-) -> tuple[dict, list[tuple], list[tuple]]:
+) -> tuple[dict, list[tuple], list[tuple], list[tuple]]:
     ranking: dict[str, tuple[float, int]] = {}
     for idx, row in enumerate(retrieved, start=1):
         customer_id = row.get("customer_id")
@@ -133,6 +139,7 @@ def _build_audit_rows(
         "version_bundle": {
             "fs_version": bundle.fs_version,
             "emb_version": bundle.emb_version,
+            "model_version": bundle.model_version,
             "policy_version": bundle.policy_version,
             "index_alias": bundle.index_alias,
             "concrete_qdrant_collection": resolved_collection,
@@ -145,9 +152,16 @@ def _build_audit_rows(
             "channel": channel,
             "requested_size": len(selected_rows),
             "policy_rejection_summary": dict(reject_counts),
+            "policy_status": policy_result.get("status", "unknown"),
         },
     }
-    return run_row, selected_rows, rejection_rows
+    decision_rows = build_policy_decision_audit_rows(
+        policy_result=policy_result,
+        bundle=bundle,
+        resolved_collection=resolved_collection,
+        decision_ts=run_ts,
+    )
+    return run_row, selected_rows, rejection_rows, decision_rows
 
 
 def _write_audit_to_postgres(
@@ -155,6 +169,7 @@ def _write_audit_to_postgres(
     run_row: dict,
     selected_rows: list[tuple],
     rejection_rows: list[tuple],
+    decision_rows: list[tuple],
 ) -> None:
     with psycopg.connect(_postgres_conninfo()) as conn:
         with conn.cursor() as cur:
@@ -207,6 +222,7 @@ def _write_audit_to_postgres(
                     """,
                     rejection_rows,
                 )
+            write_policy_decision_audit_rows(cur, decision_rows)
         conn.commit()
 
 
@@ -219,7 +235,17 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
         source_mode=FEATURE_SLICE_SOURCE,
         run_id=bundle.run_id,
     )
-    embeddings_path, vector_size = build_embeddings(feature_mart_path=feature_mart_path)
+    embeddings_path, vector_size = build_embeddings(
+        feature_mart_path=feature_mart_path,
+        ollama_model=EMBEDDING_MODEL_VERSION,
+    )
+    runtime_emb_version = read_embeddings_emb_version(embeddings_path)
+    if runtime_emb_version != bundle.emb_version:
+        raise ValueError(
+            "Embedding lineage mismatch at runtime: "
+            f"bundle.emb_version={bundle.emb_version!r}, "
+            f"runtime.emb_version={runtime_emb_version!r}"
+        )
     index_meta = create_or_replace_index(
         embeddings_path=embeddings_path,
         vector_size=vector_size,
@@ -273,7 +299,7 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
         else None
     )
     run_ts = datetime.now(timezone.utc).isoformat()
-    run_row, selected_rows, rejection_rows = _build_audit_rows(
+    run_row, selected_rows, rejection_rows, decision_rows = _build_audit_rows(
         retrieved=retrieved,
         policy_result=policy_result,
         bundle=bundle,
@@ -286,6 +312,7 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
         run_row=run_row,
         selected_rows=selected_rows,
         rejection_rows=rejection_rows,
+        decision_rows=decision_rows,
     )
 
     summary = {
@@ -311,6 +338,7 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
                 "run_table": "audience_run",
                 "selected_rows_written": len(selected_rows),
                 "rejection_summary_rows_written": len(rejection_rows),
+                "policy_decision_rows_written": len(decision_rows),
             }
         },
     }
