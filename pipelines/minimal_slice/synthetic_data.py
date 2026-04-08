@@ -16,7 +16,9 @@ def _random_region_code(rng: random.Random) -> str:
 
 
 def _random_segment_id(rng: random.Random) -> str:
-    return rng.choices(["mass", "affluent", "student", "smb"], weights=[6, 2, 1, 1], k=1)[0]
+    return rng.choices(
+        ["mass", "affluent", "student", "smb"], weights=[6, 2, 1, 1], k=1
+    )[0]
 
 
 def _random_product_line(rng: random.Random) -> str:

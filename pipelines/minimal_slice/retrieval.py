@@ -47,7 +47,9 @@ def _build_ann_filter(
 ) -> Optional[Filter]:
     must: List[FieldCondition] = []
     if product_line:
-        must.append(FieldCondition(key="product_line", match=MatchValue(value=product_line)))
+        must.append(
+            FieldCondition(key="product_line", match=MatchValue(value=product_line))
+        )
     regions = _normalize_values(region_codes)
     if regions:
         must.append(
@@ -65,9 +67,13 @@ def _build_ann_filter(
             )
         )
     if fs_version:
-        must.append(FieldCondition(key="fs_version", match=MatchValue(value=fs_version)))
+        must.append(
+            FieldCondition(key="fs_version", match=MatchValue(value=fs_version))
+        )
     if emb_version:
-        must.append(FieldCondition(key="emb_version", match=MatchValue(value=emb_version)))
+        must.append(
+            FieldCondition(key="emb_version", match=MatchValue(value=emb_version))
+        )
     if policy_version:
         must.append(
             FieldCondition(key="policy_version", match=MatchValue(value=policy_version))
@@ -75,9 +81,13 @@ def _build_ann_filter(
 
     # Keep hard suppressions out of ANN candidates by default.
     if not include_employee:
-        must.append(FieldCondition(key="is_employee_flag", match=MatchValue(value=False)))
+        must.append(
+            FieldCondition(key="is_employee_flag", match=MatchValue(value=False))
+        )
     if not include_do_not_contact:
-        must.append(FieldCondition(key="do_not_contact_flag", match=MatchValue(value=False)))
+        must.append(
+            FieldCondition(key="do_not_contact_flag", match=MatchValue(value=False))
+        )
     if not include_opt_out:
         must.append(FieldCondition(key="opt_out_flag", match=MatchValue(value=False)))
     if not include_legal_suppression:
@@ -145,11 +155,7 @@ def retrieve_similar(
         if query_customer_id:
             query_point_filter = Filter(
                 must=[
-                    *(
-                        ann_filter.must
-                        if ann_filter and ann_filter.must
-                        else []
-                    ),
+                    *(ann_filter.must if ann_filter and ann_filter.must else []),
                     FieldCondition(
                         key="customer_id", match=MatchValue(value=query_customer_id)
                     ),

@@ -23,6 +23,9 @@ This will:
 - Local compose uses `infra/.env.local` by default via `Makefile`.
 - Local Airflow bootstrap credentials are `admin / 203217` (dev-only convenience; not production-safe).
 - For host-run embedding/retrieval commands, set `OLLAMA_BASE_URL=http://localhost:11434` if needed.
+- Retrieval/API RBAC is enabled via API keys in env:
+  - `AE_CAMPAIGN_API_KEYS`
+  - `AE_ADMIN_API_KEYS`
 
 ## Lint and Format
 ```bash
@@ -100,6 +103,16 @@ Run retrieval API locally:
 make retrieval-api
 ```
 
+Example calls with role-separated keys:
+```bash
+curl -H "X-AE-API-Key: campaign_local_key" -H "Content-Type: application/json" \
+  -d '{"top_k": 5, "query_customer_id": "cust_00000"}' \
+  http://localhost:8000/v1/retrieve
+
+curl -H "X-AE-API-Key: admin_local_key" \
+  http://localhost:8000/v1/admin/index/generations/latest
+```
+
 Minimal slice demo flow:
 
 ```bash
@@ -112,3 +125,7 @@ Optional helper targets:
 make seed
 make build-index
 ```
+
+Airflow end-to-end DAG (real minimal-slice chain):
+- DAG id: `audience_engine_minimal_slice_e2e`
+- Defined in: `pipelines/airflow_dags/audience_engine_dags.py`

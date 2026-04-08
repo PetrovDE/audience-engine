@@ -23,7 +23,9 @@ def _read_jsonl(path: Path) -> List[Dict]:
     return rows
 
 
-def _build_from_raw_rows(raw_rows: List[Dict], fs_version: str, allowed: List[str]) -> List[Dict]:
+def _build_from_raw_rows(
+    raw_rows: List[Dict], fs_version: str, allowed: List[str]
+) -> List[Dict]:
     snapshot_rows: List[Dict] = []
     for row in raw_rows:
         snap = {
@@ -59,7 +61,9 @@ def _normalize_clickhouse_rows(
                 raise KeyError(f"ClickHouse row missing required feature: {name}")
             normalized_row[name] = row[name]
         normalized_row["is_employee_flag"] = bool(row.get("is_employee_flag", False))
-        normalized_row["do_not_contact_flag"] = bool(row.get("do_not_contact_flag", False))
+        normalized_row["do_not_contact_flag"] = bool(
+            row.get("do_not_contact_flag", False)
+        )
         normalized_row["opt_out_flag"] = bool(row.get("opt_out_flag", False))
         normalized_row["legal_suppression_flag"] = bool(
             row.get("legal_suppression_flag", False)

@@ -9,7 +9,9 @@ from pipelines.version_bundle import build_version_bundle, preflight_version_bun
 
 ROOT = Path(__file__).resolve().parents[2]
 GOVERNANCE_DIR = ROOT / "governance"
-ACTIVE_EMBEDDING_SPEC_PATH = GOVERNANCE_DIR / "embeddings" / "embedding_specs" / "emb_llm_v2.yaml"
+ACTIVE_EMBEDDING_SPEC_PATH = (
+    GOVERNANCE_DIR / "embeddings" / "embedding_specs" / "emb_llm_v2.yaml"
+)
 POLICY_REGISTRY_PATH = GOVERNANCE_DIR / "policies" / "policy_registry.yaml"
 FEATURE_REGISTRY_PATH = GOVERNANCE_DIR / "features" / "feature_registry.yaml"
 
@@ -32,7 +34,9 @@ def test_build_version_bundle_sets_required_fields():
     assert bundle.emb_version == "fs_credit_v1+prompt_credit_v1+nomic-embed-text"
     assert bundle.model_version == "nomic-embed-text"
     assert bundle.index_alias == "audience-serving"
-    assert bundle.concrete_qdrant_collection.startswith("audience-serving-fs_credit_v1-")
+    assert bundle.concrete_qdrant_collection.startswith(
+        "audience-serving-fs_credit_v1-"
+    )
     UUID(bundle.run_id)
 
 
@@ -96,7 +100,9 @@ def test_preflight_fails_when_pii_field_would_be_embedded(tmp_path: Path):
     spec["template"]["format"] += "\n  first_name={first_name}\n"
     broken_spec_path.write_text(yaml.safe_dump(spec), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="PII-tagged fields would be embedded or logged"):
+    with pytest.raises(
+        ValueError, match="PII-tagged fields would be embedded or logged"
+    ):
         preflight_version_bundle(
             bundle=_bundle(),
             embedding_spec_path=broken_spec_path,

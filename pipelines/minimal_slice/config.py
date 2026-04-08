@@ -14,13 +14,9 @@ SUMMARY_PATH = RUN_DIR / "run_summary.json"
 
 GOVERNANCE_DIR = ROOT / "governance"
 FEATURE_SET_PATH = GOVERNANCE_DIR / "features" / "feature_sets" / "fs_credit_v1.yaml"
-EMBED_SPEC_PATH = (
-    GOVERNANCE_DIR / "embeddings" / "embedding_specs" / "emb_llm_v2.yaml"
-)
+EMBED_SPEC_PATH = GOVERNANCE_DIR / "embeddings" / "embedding_specs" / "emb_llm_v2.yaml"
 REASON_CODES_PATH = GOVERNANCE_DIR / "dictionaries" / "reason_codes.yaml"
-EMBEDDING_MODEL_VERSION = os.getenv(
-    "EMBEDDING_MODEL_VERSION", "nomic-embed-text"
-)
+EMBEDDING_MODEL_VERSION = os.getenv("EMBEDDING_MODEL_VERSION", "nomic-embed-text")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
@@ -87,20 +83,22 @@ CLICKHOUSE_FEATURE_SLICE_QUERY = os.getenv(
         "FROM feature_mart_snapshot"
     ),
 )
-CLICKHOUSE_FEATURE_SLICE_LIMIT = int(os.getenv("CLICKHOUSE_FEATURE_SLICE_LIMIT", "5000"))
+CLICKHOUSE_FEATURE_SLICE_LIMIT = int(
+    os.getenv("CLICKHOUSE_FEATURE_SLICE_LIMIT", "5000")
+)
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_DB = int(os.getenv("REDIS_DB", "0"))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
-REDIS_EMBEDDING_CACHE_ENABLED = os.getenv("REDIS_EMBEDDING_CACHE_ENABLED", "1").lower() in {
+REDIS_EMBEDDING_CACHE_ENABLED = os.getenv(
+    "REDIS_EMBEDDING_CACHE_ENABLED", "1"
+).lower() in {
     "1",
     "true",
     "yes",
 }
-REDIS_EMBEDDING_CACHE_PREFIX = os.getenv(
-    "REDIS_EMBEDDING_CACHE_PREFIX", "ae:emb_cache"
-)
+REDIS_EMBEDDING_CACHE_PREFIX = os.getenv("REDIS_EMBEDDING_CACHE_PREFIX", "ae:emb_cache")
 REDIS_EMBEDDING_CACHE_TTL_SECONDS = int(
     os.getenv("REDIS_EMBEDDING_CACHE_TTL_SECONDS", "86400")
 )

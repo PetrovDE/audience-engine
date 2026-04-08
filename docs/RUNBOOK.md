@@ -80,3 +80,46 @@ docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml cp po
 - If `FEATURE_SLICE_SOURCE=clickhouse`, ensure `CLICKHOUSE_FEATURE_SLICE_QUERY` returns all contract columns needed by `governance/contracts/feature_mart.yaml`.
 - If MinIO credentials are unset/invalid, feature-mart Parquet and export uploads fail fast during runtime operations.
 - If Redis cache is unavailable, embedding runs fail; disable cache explicitly with `REDIS_EMBEDDING_CACHE_ENABLED=0` for emergency bypass.
+
+## Lifecycle Operations via Protected API
+
+Admin lifecycle operations are exposed via retrieval API and require an admin key:
+
+```bash
+curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" \
+  http://localhost:8000/v1/admin/index/generations/latest
+
+curl -X POST -H "X-AE-API-Key: ${AE_ADMIN_KEY}" \
+  http://localhost:8000/v1/admin/index/generations/validate-latest
+
+curl -X POST -H "X-AE-API-Key: ${AE_ADMIN_KEY}" \
+  http://localhost:8000/v1/admin/index/alias/promote-latest
+
+curl -X POST -H "X-AE-API-Key: ${AE_ADMIN_KEY}" \
+  http://localhost:8000/v1/admin/index/alias/rollback-latest
+```
+
+Inspect append-only lifecycle action audit:
+
+```bash
+curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" \
+  "http://localhost:8000/v1/admin/index/lifecycle-audit?limit=50"
+```
+
+## Airflow E2E DAG Trigger + Monitor
+
+Real minimal-slice DAG:
+- DAG id: `audience_engine_minimal_slice_e2e`
+- File: `pipelines/airflow_dags/audience_engine_dags.py`
+
+Manual trigger from scheduler container:
+```bash
+docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml exec airflow-scheduler \
+  airflow dags trigger audience_engine_minimal_slice_e2e
+```
+
+List active runs:
+```bash
+docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml exec airflow-scheduler \
+  airflow dags list-runs -d audience_engine_minimal_slice_e2e
+```

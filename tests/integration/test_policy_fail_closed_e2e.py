@@ -75,11 +75,9 @@ def _write_cpu_embeddings_for_run_flow(
     prompt_version = "prompt_credit_v1"
     dim = 8
     emb_version = (
-        (
-            f"{rows[0]['fs_version']}+{prompt_version}+{ollama_model}"
-            if rows
-            else "unknown"
-        )
+        f"{rows[0]['fs_version']}+{prompt_version}+{ollama_model}"
+        if rows
+        else "unknown"
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as f:
@@ -117,7 +115,7 @@ def _postgres_conninfo() -> str:
 def test_run_flow_fail_closed_persists_decisions_and_exports_zero(monkeypatch):
     if psycopg is None:
         pytest.skip("psycopg is not installed")
-    from pipelines.minimal_slice import run_flow
+    from pipelines.minimal_slice import feature_mart, run_flow
 
     if not _docker_available():
         pytest.skip("docker is not available")
@@ -144,6 +142,46 @@ def test_run_flow_fail_closed_persists_decisions_and_exports_zero(monkeypatch):
             "build_embeddings",
             _write_cpu_embeddings_for_run_flow,
         )
+        monkeypatch.setattr(
+            run_flow,
+            "create_or_replace_index",
+            lambda embeddings_path, vector_size, collection_name, alias_name: {
+                "alias": alias_name,
+                "collection": collection_name,
+            },
+        )
+        monkeypatch.setattr(
+            run_flow,
+            "retrieve_similar",
+            lambda **kwargs: [
+                {
+                    "customer_id": "cust_00001",
+                    "score": 0.91,
+                    "payload": {
+                        "do_not_contact_flag": False,
+                        "is_employee_flag": False,
+                        "customer_tenure_months": 12,
+                        "delinquency_12m_count": 0,
+                        "opt_out_flag": False,
+                        "legal_suppression_flag": False,
+                    },
+                },
+                {
+                    "customer_id": "cust_00002",
+                    "score": 0.77,
+                    "payload": {
+                        "do_not_contact_flag": False,
+                        "is_employee_flag": False,
+                        "customer_tenure_months": 9,
+                        "delinquency_12m_count": 1,
+                        "opt_out_flag": False,
+                        "legal_suppression_flag": False,
+                    },
+                },
+            ],
+        )
+        monkeypatch.setattr(run_flow, "minio_is_configured", lambda: False)
+        monkeypatch.setattr(feature_mart, "minio_is_configured", lambda: False)
 
         summary = run_flow.run_minimal_vertical_slice(
             campaign_id="camp_fail_closed_e2e"

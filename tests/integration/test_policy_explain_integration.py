@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from uuid import uuid4
@@ -160,8 +161,11 @@ def test_policy_explain_reads_real_db_backed_decision():
             conn.commit()
 
         client = TestClient(app_module.app)
+        os.environ["AE_CAMPAIGN_API_KEYS"] = "campaign-test-key"
+        os.environ["AE_ADMIN_API_KEYS"] = "admin-test-key"
         response = client.get(
-            f"/v1/policy/decisions/{run_id}/cust_explain_001"
+            f"/v1/policy/decisions/{run_id}/cust_explain_001",
+            headers={"X-AE-API-Key": "admin-test-key"},
         )
         assert response.status_code == 200, response.text
         payload = response.json()
@@ -171,8 +175,7 @@ def test_policy_explain_reads_real_db_backed_decision():
         assert payload["reason_codes"] == ["POLICY_FAIL_CLOSED_REQUIRED_INPUT"]
         assert payload["policy_version"] == config.POLICY_VERSION
         assert (
-            payload["emb_version"]
-            == "fs_credit_v1+prompt_credit_v1+nomic-embed-text"
+            payload["emb_version"] == "fs_credit_v1+prompt_credit_v1+nomic-embed-text"
         )
     finally:
         _compose("down")

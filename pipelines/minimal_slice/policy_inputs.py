@@ -69,7 +69,9 @@ def _source_error(
     return payload
 
 
-def _load_blacklist(path: Path) -> tuple[Dict[str, Any], set[str], List[Dict[str, Any]]]:
+def _load_blacklist(
+    path: Path,
+) -> tuple[Dict[str, Any], set[str], List[Dict[str, Any]]]:
     status = _base_source_status("blacklist", path, required=True)
     if not path.exists():
         status["status"] = "missing"

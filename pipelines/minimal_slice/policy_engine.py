@@ -174,7 +174,9 @@ def _decision_input_facts(context: Dict[str, Any]) -> Dict[str, Any]:
         "cooldown_after_refusal_active": bool(
             context.get("cooldown_after_refusal_active", False)
         ),
-        "campaign_conflict_active": bool(context.get("campaign_conflict_active", False)),
+        "campaign_conflict_active": bool(
+            context.get("campaign_conflict_active", False)
+        ),
     }
 
 
@@ -287,7 +289,10 @@ def _build_candidate_context(
             continue
         if campaign_id and str(row_campaign) == str(campaign_id):
             continue
-        if conflicting_campaign_ids and str(row_campaign) not in conflicting_campaign_ids:
+        if (
+            conflicting_campaign_ids
+            and str(row_campaign) not in conflicting_campaign_ids
+        ):
             continue
         if active_flag:
             conflict_active = True
@@ -323,7 +328,9 @@ def evaluate_policy(
     requested_size: int | None = None,
     refusal_cooldown_days: int = 30,
 ) -> Dict[str, Any]:
-    policy = _load_policy(policy_version=policy_version, policy_registry_path=policy_registry_path)
+    policy = _load_policy(
+        policy_version=policy_version, policy_registry_path=policy_registry_path
+    )
     reason_dict = _load_reason_dictionary(reason_codes_path=reason_codes_path)
     rules = sorted(
         [
@@ -378,9 +385,7 @@ def evaluate_policy(
         reasons: List[Dict[str, Any]] = []
         matched_rules: List[Dict[str, Any]] = []
         for rule in rules:
-            expr = _normalize_rule_expr(
-                rule.get("when_jsonlogic", rule.get("when"))
-            )
+            expr = _normalize_rule_expr(rule.get("when_jsonlogic", rule.get("when")))
             matched = bool(_eval_jsonlogic(expr, context))
             if not matched:
                 continue
@@ -392,7 +397,9 @@ def evaluate_policy(
                 raise ValueError(f"Rule '{rule.get('id')}' missing reason_code")
             if reason_code not in reason_dict:
                 raise ValueError(
-                    f"Rule '{rule.get('id')}' references unknown reason_code '{reason_code}'"
+                    "Rule "
+                    f"'{rule.get('id')}' references unknown reason_code "
+                    f"'{reason_code}'"
                 )
             priority = int(rule.get("priority", 1000))
             reasons.append(
@@ -440,7 +447,9 @@ def evaluate_policy(
         selected = selected[: max(requested_size, 0)]
     selected_customer_ids = {row["customer_id"] for row in selected}
     for row in results:
-        row["selected"] = row["customer_id"] in selected_customer_ids and row["decision"] == "approve"
+        row["selected"] = (
+            row["customer_id"] in selected_customer_ids and row["decision"] == "approve"
+        )
 
     rejected_count = sum(1 for r in results if r["decision"] == "reject")
     approved_count = len(results) - rejected_count

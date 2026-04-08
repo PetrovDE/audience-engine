@@ -128,7 +128,8 @@ def preflight_version_bundle(
         )
 
     expected_emb_version = (
-        f"{bundle.fs_version}+{resolved_runtime_prompt_version}+{resolved_runtime_model}"
+        f"{bundle.fs_version}+{resolved_runtime_prompt_version}+"
+        f"{resolved_runtime_model}"
     )
     if bundle.emb_version != expected_emb_version:
         raise ValueError(
@@ -147,7 +148,9 @@ def preflight_version_bundle(
         )
 
     feature_meta = {
-        feat["id"]: feat for feat in feature_registry.get("features", []) if feat.get("id")
+        feat["id"]: feat
+        for feat in feature_registry.get("features", [])
+        if feat.get("id")
     }
     embedded_fields = _template_fields(emb_spec["template"]["format"])
     checked_fields = embedded_fields.union(set(logged_fields))
@@ -161,5 +164,6 @@ def preflight_version_bundle(
 
     if pii_violations:
         raise ValueError(
-            "PII-tagged fields would be embedded or logged: " + ", ".join(pii_violations)
+            "PII-tagged fields would be embedded or logged: "
+            + ", ".join(pii_violations)
         )

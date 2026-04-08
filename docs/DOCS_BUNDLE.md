@@ -13,6 +13,8 @@ Audience Engine is an open-source bank customer ranking and similarity platform 
 - Policy Engine gate is mandatory before export.
 - PII must not be embedded or logged.
 - Required version lineage includes `fs_version`, `emb_version`, `policy_version`, and index alias/generation context.
+- API-key RBAC separates campaign retrieval access from admin lifecycle/audit operations.
+- Runtime data-quality gates validate raw/feature/embedding artifacts in the primary run path.
 
 Canonical references:
 - [ARCHITECTURE_V3.md](ARCHITECTURE_V3.md)
@@ -94,6 +96,12 @@ FROM audience_run
 ORDER BY run_ts DESC
 LIMIT 5;
 ```
+
+Lifecycle operations now have a protected API surface:
+- `POST /v1/admin/index/generations/validate-latest`
+- `POST /v1/admin/index/alias/promote-latest`
+- `POST /v1/admin/index/alias/rollback-latest`
+- `GET /v1/admin/index/lifecycle-audit`
 
 Canonical references:
 - [INDEX_LIFECYCLE.md](INDEX_LIFECYCLE.md)

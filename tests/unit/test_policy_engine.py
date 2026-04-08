@@ -138,34 +138,30 @@ def _policy_registry_and_reasons(tmp_path):
                         {
                             "id": "delinq",
                             "priority": 22,
-                            "when_jsonlogic": {">": [{"var": "delinquency_12m_count"}, 2]},
+                            "when_jsonlogic": {
+                                ">": [{"var": "delinquency_12m_count"}, 2]
+                            },
                             "action": "suppress",
                             "reason_code": "RISK_DELINQ_GT_2",
                         },
                         {
                             "id": "freq_7d",
                             "priority": 30,
-                            "when_jsonlogic": {
-                                ">=": [{"var": "contacts_last_7d"}, 2]
-                            },
+                            "when_jsonlogic": {">=": [{"var": "contacts_last_7d"}, 2]},
                             "action": "suppress",
                             "reason_code": "QUOTA_FREQ_CAP_7D",
                         },
                         {
                             "id": "freq_30d",
                             "priority": 31,
-                            "when_jsonlogic": {
-                                ">=": [{"var": "contacts_last_30d"}, 3]
-                            },
+                            "when_jsonlogic": {">=": [{"var": "contacts_last_30d"}, 3]},
                             "action": "suppress",
                             "reason_code": "QUOTA_FREQ_CAP_30D",
                         },
                         {
                             "id": "freq_90d",
                             "priority": 32,
-                            "when_jsonlogic": {
-                                ">=": [{"var": "contacts_last_90d"}, 4]
-                            },
+                            "when_jsonlogic": {">=": [{"var": "contacts_last_90d"}, 4]},
                             "action": "suppress",
                             "reason_code": "QUOTA_FREQ_CAP_90D",
                         },
@@ -195,7 +191,9 @@ def _policy_registry_and_reasons(tmp_path):
     return registry_path, reason_codes_path
 
 
-def _evaluate(tmp_path, candidates, comm_history_rows=None, blacklist_ids=None, **kwargs):
+def _evaluate(
+    tmp_path, candidates, comm_history_rows=None, blacklist_ids=None, **kwargs
+):
     registry_path, reason_codes_path = _policy_registry_and_reasons(tmp_path)
     blacklist_path = tmp_path / "blacklist.txt"
     blacklist_path.write_text("\n".join(blacklist_ids or []), encoding="utf-8")
@@ -251,10 +249,26 @@ def test_policy_eligibility_employee_tenure_delinquency(tmp_path):
 def test_policy_frequency_caps_and_cooldown(tmp_path):
     now = datetime.now(timezone.utc)
     rows = [
-        {"customer_id": "cust_freq", "channel": "email", "contact_ts": (now - timedelta(days=1)).isoformat()},
-        {"customer_id": "cust_freq", "channel": "email", "contact_ts": (now - timedelta(days=2)).isoformat()},
-        {"customer_id": "cust_freq", "channel": "email", "contact_ts": (now - timedelta(days=10)).isoformat()},
-        {"customer_id": "cust_freq", "channel": "email", "contact_ts": (now - timedelta(days=60)).isoformat()},
+        {
+            "customer_id": "cust_freq",
+            "channel": "email",
+            "contact_ts": (now - timedelta(days=1)).isoformat(),
+        },
+        {
+            "customer_id": "cust_freq",
+            "channel": "email",
+            "contact_ts": (now - timedelta(days=2)).isoformat(),
+        },
+        {
+            "customer_id": "cust_freq",
+            "channel": "email",
+            "contact_ts": (now - timedelta(days=10)).isoformat(),
+        },
+        {
+            "customer_id": "cust_freq",
+            "channel": "email",
+            "contact_ts": (now - timedelta(days=60)).isoformat(),
+        },
         {
             "customer_id": "cust_cooldown",
             "channel": "email",
@@ -406,10 +420,10 @@ def test_policy_fail_closed_when_required_blacklist_missing(tmp_path):
     assert result["summary"]["fail_closed"] is True
     assert result["summary"]["approved_count"] == 0
     assert result["summary"]["rejected_count"] == 1
+    assert result["rejection_summary"]["POLICY_FAIL_CLOSED_REQUIRED_INPUT"] == 1
     assert (
-        result["rejection_summary"]["POLICY_FAIL_CLOSED_REQUIRED_INPUT"] == 1
+        result["input_validation"]["source_status"]["blacklist"]["status"] == "missing"
     )
-    assert result["input_validation"]["source_status"]["blacklist"]["status"] == "missing"
     assert result["results"][0]["decision"] == "reject"
 
 
@@ -435,7 +449,10 @@ def test_policy_fail_closed_when_comm_history_invalid(tmp_path):
         result["input_validation"]["source_status"]["communication_history"]["status"]
         == "invalid"
     )
-    assert result["results"][0]["explanation"]["evaluation_mode"] == "fail_closed_required_inputs"
+    assert (
+        result["results"][0]["explanation"]["evaluation_mode"]
+        == "fail_closed_required_inputs"
+    )
 
 
 def test_policy_success_when_required_inputs_present(tmp_path):

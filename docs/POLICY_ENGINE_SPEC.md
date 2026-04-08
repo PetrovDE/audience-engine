@@ -25,6 +25,7 @@ Implemented now:
 - If a required source is missing/unreadable/invalid, evaluation returns reject decisions with reason code `POLICY_FAIL_CLOSED_REQUIRED_INPUT`.
 - Per-customer decisions are persisted in append-only Postgres table `policy_decision_audit`.
 - Explain/read path exists at retrieval API: `GET /v1/policy/decisions/{run_id}/{customer_id}`.
+  - Retrieval API now enforces admin/operator RBAC for explain reads.
 
 Still future/partial:
 - Dedicated standalone policy service/API (`POST /v1/policy/evaluate`, `POST /v1/policy/validate`) is still architectural target, not implemented as a separate deployed service.

@@ -154,9 +154,16 @@ def _resolve_alias_collection(client: QdrantClient, alias_name: str) -> str | No
 
 def _switch_alias(alias_name: str, collection_name: str) -> Dict[str, str]:
     client = QdrantClient(url=QDRANT_URL)
+
+    def _apply_alias_ops(ops: list[Any]) -> None:
+        try:
+            client.update_collection_aliases(change_aliases_operations=ops)
+        except TypeError:
+            client.update_collection_aliases(change_aliases_operation=ops)
+
     try:
-        client.update_collection_aliases(
-            change_aliases_operation=[
+        _apply_alias_ops(
+            [
                 DeleteAliasOperation(delete_alias={"alias_name": alias_name}),
                 CreateAliasOperation(
                     create_alias={
@@ -167,8 +174,8 @@ def _switch_alias(alias_name: str, collection_name: str) -> Dict[str, str]:
             ]
         )
     except Exception:
-        client.update_collection_aliases(
-            change_aliases_operation=[
+        _apply_alias_ops(
+            [
                 CreateAliasOperation(
                     create_alias={
                         "collection_name": collection_name,
@@ -244,7 +251,8 @@ def _load_latest_generation(
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     sql = (
         "SELECT alias_name, emb_version, dimension, generation, collection_name, "
-        "status, points_count, previous_collection_name "
+        "status, points_count, previous_collection_name, validation_details, "
+        "metadata, created_at, validated_at, promoted_at, rolled_back_at "
         f"FROM index_generations {where_sql} "
         "ORDER BY created_at DESC LIMIT 1"
     )
@@ -263,7 +271,66 @@ def _load_latest_generation(
         "status": row[5],
         "points_count": row[6],
         "previous_collection_name": row[7],
+        "validation_details": row[8] or {},
+        "metadata": row[9] or {},
+        "created_at": row[10].isoformat() if row[10] else None,
+        "validated_at": row[11].isoformat() if row[11] else None,
+        "promoted_at": row[12].isoformat() if row[12] else None,
+        "rolled_back_at": row[13].isoformat() if row[13] else None,
     }
+
+
+def _load_generation_history(
+    *,
+    limit: int = 50,
+    status: str | None = None,
+    alias_name: str | None = None,
+) -> list[dict[str, Any]]:
+    _ensure_index_generations_table()
+    safe_limit = max(1, min(limit, 200))
+    clauses: list[str] = []
+    params: list[Any] = []
+    if status:
+        clauses.append("status = %s")
+        params.append(status)
+    if alias_name:
+        clauses.append("alias_name = %s")
+        params.append(alias_name)
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    sql = (
+        "SELECT alias_name, emb_version, dimension, generation, collection_name, "
+        "status, points_count, previous_collection_name, validation_details, "
+        "metadata, created_at, validated_at, promoted_at, rolled_back_at "
+        f"FROM index_generations {where_sql} "
+        "ORDER BY created_at DESC LIMIT %s"
+    )
+    params.append(safe_limit)
+    with _psycopg().connect(_postgres_conninfo()) as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, tuple(params))
+            rows = cur.fetchall()
+
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        out.append(
+            {
+                "alias_name": row[0],
+                "emb_version": row[1],
+                "dimension": row[2],
+                "generation": row[3],
+                "collection_name": row[4],
+                "status": row[5],
+                "points_count": row[6],
+                "previous_collection_name": row[7],
+                "validation_details": row[8] or {},
+                "metadata": row[9] or {},
+                "created_at": row[10].isoformat() if row[10] else None,
+                "validated_at": row[11].isoformat() if row[11] else None,
+                "promoted_at": row[12].isoformat() if row[12] else None,
+                "rolled_back_at": row[13].isoformat() if row[13] else None,
+            }
+        )
+    return out
 
 
 def _mark_validation(
@@ -671,6 +738,23 @@ def rollback_latest_alias() -> Dict[str, Any]:
     if not latest:
         raise ValueError("No promoted generation found in metadata")
     return rollback_alias(alias_name=latest["alias_name"])
+
+
+def get_latest_generation(
+    *,
+    status: str | None = None,
+    alias_name: str | None = None,
+) -> dict[str, Any] | None:
+    return _load_latest_generation(status=status, alias_name=alias_name)
+
+
+def list_generation_history(
+    *,
+    limit: int = 50,
+    status: str | None = None,
+    alias_name: str | None = None,
+) -> list[dict[str, Any]]:
+    return _load_generation_history(limit=limit, status=status, alias_name=alias_name)
 
 
 def switch_alias(

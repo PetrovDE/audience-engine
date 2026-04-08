@@ -35,6 +35,24 @@ Notes:
 - Atomically switches alias back to previous generation.
 - Marks current generation as `rolled_back`.
 
+## Protected Admin API Surface
+
+Lifecycle operations are now exposed via retrieval API admin endpoints and protected by admin/operator API keys:
+
+- `POST /v1/admin/index/generations/validate-latest`
+- `POST /v1/admin/index/alias/promote-latest`
+- `POST /v1/admin/index/alias/rollback-latest`
+- `GET /v1/admin/index/generations/latest`
+- `GET /v1/admin/index/generations`
+- `GET /v1/admin/index/lifecycle-audit`
+
+RBAC requirements:
+- Header: `X-AE-API-Key`
+- Role keys from env:
+  - `AE_CAMPAIGN_API_KEYS`
+  - `AE_ADMIN_API_KEYS`
+- Lifecycle endpoints require `admin_operator` role.
+
 ## Make Targets
 
 1. Build new generation:
@@ -60,12 +78,17 @@ make rollback-index
 ## Metadata Storage
 
 Postgres table: `index_generations`
+Postgres table: `index_lifecycle_audit` (append-only operational action trail with actor/outcome/details)
 
 Status values:
 - `built`
 - `validated`
 - `promoted`
 - `rolled_back`
+- `failed`
+
+Lifecycle action audit outcomes:
+- `success`
 - `failed`
 
 Schema files:

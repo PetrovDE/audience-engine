@@ -78,7 +78,9 @@ def _deterministic_vector(customer_id: str, dim: int = 8) -> list[float]:
     return [((seed + i * 17) % 101) / 100.0 + 0.01 for i in range(dim)]
 
 
-def _write_cpu_embeddings(feature_mart_path: Path, output_path: Path) -> tuple[Path, int]:
+def _write_cpu_embeddings(
+    feature_mart_path: Path, output_path: Path
+) -> tuple[Path, int]:
     rows = _read_jsonl(feature_mart_path)
     dim = 8
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -218,10 +220,13 @@ def _write_and_verify_audit_records(
                     ),
                 )
 
-            cur.execute("SELECT count(*) FROM audience_run WHERE run_id = %s", (run_id,))
+            cur.execute(
+                "SELECT count(*) FROM audience_run WHERE run_id = %s", (run_id,)
+            )
             run_count = int(cur.fetchone()[0])
             cur.execute(
-                "SELECT count(*) FROM audience_run_selected WHERE run_id = %s", (run_id,)
+                "SELECT count(*) FROM audience_run_selected WHERE run_id = %s",
+                (run_id,),
             )
             selected_count = int(cur.fetchone()[0])
             cur.execute(
@@ -284,7 +289,9 @@ def test_minimal_slice_smoke_cpu_no_gpu_required():
             alias_name=build_meta["alias"],
             expected_count=build_meta["points_count"],
         )
-        promote_alias(alias_name=build_meta["alias"], collection_name=build_meta["collection"])
+        promote_alias(
+            alias_name=build_meta["alias"], collection_name=build_meta["collection"]
+        )
 
         # recommend -> policy -> export
         retrieved = retrieve_similar(
@@ -306,7 +313,9 @@ def test_minimal_slice_smoke_cpu_no_gpu_required():
                 "do_not_contact_flag": row.get("payload", {}).get(
                     "do_not_contact_flag", False
                 ),
-                "is_employee_flag": row.get("payload", {}).get("is_employee_flag", False),
+                "is_employee_flag": row.get("payload", {}).get(
+                    "is_employee_flag", False
+                ),
                 "customer_tenure_months": row.get("payload", {}).get(
                     "customer_tenure_months", 0
                 ),

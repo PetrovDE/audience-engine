@@ -1,4 +1,5 @@
 import json
+import logging
 from collections import Counter
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -32,6 +33,12 @@ from .config import (
     RAW_PATH,
     SUMMARY_PATH,
 )
+from .data_quality import (
+    DataQualityError,
+    validate_embeddings_artifact,
+    validate_feature_mart_contract,
+    validate_raw_contract,
+)
 from .embedding import build_embeddings, read_embeddings_emb_version
 from .exporter import export_approved
 from .feature_mart import build_feature_mart_snapshot
@@ -44,6 +51,8 @@ from .qdrant_index import create_or_replace_index
 from .retrieval import retrieve_similar
 from .storage import minio_is_configured, upload_export_to_minio
 from .synthetic_data import generate_synthetic_data
+
+logger = logging.getLogger(__name__)
 
 
 def _load_feature_set_version() -> str:
@@ -226,44 +235,8 @@ def _write_audit_to_postgres(
         conn.commit()
 
 
-def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
-    bundle = _build_and_validate_bundle(campaign_id=campaign_id or str(uuid4()))
-    generated = generate_synthetic_data(customer_count=200, seed=7)
-    feature_mart_path = build_feature_mart_snapshot(
-        raw_path=generated["raw"],
-        output_path=FEATURE_MART_PATH,
-        source_mode=FEATURE_SLICE_SOURCE,
-        run_id=bundle.run_id,
-    )
-    embeddings_path, vector_size = build_embeddings(
-        feature_mart_path=feature_mart_path,
-        ollama_model=EMBEDDING_MODEL_VERSION,
-    )
-    runtime_emb_version = read_embeddings_emb_version(embeddings_path)
-    if runtime_emb_version != bundle.emb_version:
-        raise ValueError(
-            "Embedding lineage mismatch at runtime: "
-            f"bundle.emb_version={bundle.emb_version!r}, "
-            f"runtime.emb_version={runtime_emb_version!r}"
-        )
-    index_meta = create_or_replace_index(
-        embeddings_path=embeddings_path,
-        vector_size=vector_size,
-        collection_name=bundle.concrete_qdrant_collection,
-        alias_name=bundle.index_alias,
-    )
-
-    query_customer = "cust_00000"
-    retrieved = retrieve_similar(
-        top_k=50,
-        query_customer_id=query_customer,
-        product_line="credit_card",
-        region_codes=["us_west", "us_central", "us_east"],
-        segment_ids=["mass", "affluent", "student", "smb"],
-        min_tenure_months=3,
-        max_delinquency_12m_count=2,
-    )
-    policy_input = []
+def _build_policy_input(retrieved: list[dict]) -> list[dict]:
+    policy_input: list[dict] = []
     for row in retrieved:
         payload = row.get("payload") or {}
         policy_input.append(
@@ -278,75 +251,176 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
                 "legal_suppression_flag": payload.get("legal_suppression_flag", False),
             }
         )
-    policy_result = evaluate_policy(
-        candidates=policy_input,
-        policy_version=bundle.policy_version,
-        blacklist_path=BLACKLIST_PATH,
-        comm_history_path=COMM_HISTORY_PATH,
-        campaign_id=bundle.campaign_id,
-        requested_size=20,
-    )
-    export_ready = {
-        **policy_result,
-        "results": [
-            row for row in policy_result["results"] if row.get("selected", False)
-        ],
-    }
-    export_path = export_approved(policy_result=export_ready, output_path=EXPORT_PATH)
-    export_minio_uri = (
-        upload_export_to_minio(export_path=export_path, run_id=bundle.run_id)
-        if minio_is_configured()
-        else None
-    )
-    run_ts = datetime.now(timezone.utc).isoformat()
-    run_row, selected_rows, rejection_rows, decision_rows = _build_audit_rows(
-        retrieved=retrieved,
-        policy_result=policy_result,
-        bundle=bundle,
-        run_ts=run_ts,
-        product_id="minimal_slice",
-        channel="email",
-        resolved_collection=index_meta["collection"],
-    )
-    _write_audit_to_postgres(
-        run_row=run_row,
-        selected_rows=selected_rows,
-        rejection_rows=rejection_rows,
-        decision_rows=decision_rows,
-    )
+    return policy_input
 
+
+def _write_failure_summary(
+    *,
+    bundle: VersionBundle,
+    run_ts: str,
+    quality_checks: list[dict],
+    error: DataQualityError,
+) -> None:
     summary = {
         "run_ts": run_ts,
-        "versions": run_row["version_bundle"],
-        "inputs": {
-            "raw_path": str(RAW_PATH),
-            "feature_mart_path": str(feature_mart_path),
-            "embeddings_path": str(embeddings_path),
-            "blacklist_path": str(BLACKLIST_PATH),
-            "comm_history_path": str(COMM_HISTORY_PATH),
+        "status": "failed",
+        "versions": {
+            "fs_version": bundle.fs_version,
+            "emb_version": bundle.emb_version,
+            "model_version": bundle.model_version,
+            "policy_version": bundle.policy_version,
+            "index_alias": bundle.index_alias,
+            "concrete_qdrant_collection": bundle.concrete_qdrant_collection,
+            "run_id": bundle.run_id,
+            "campaign_id": bundle.campaign_id,
         },
-        "index": index_meta,
-        "retrieval": {
-            "query_customer_id": query_customer,
-            "retrieved_count": len(retrieved),
-        },
-        "policy": policy_result["summary"],
-        "export_path": str(export_path),
-        "export_minio_uri": export_minio_uri,
-        "audit": {
-            "postgres": {
-                "run_table": "audience_run",
-                "selected_rows_written": len(selected_rows),
-                "rejection_summary_rows_written": len(rejection_rows),
-                "policy_decision_rows_written": len(decision_rows),
-            }
+        "quality": {
+            "status": "failed",
+            "checks": quality_checks,
+            "error": error.to_dict(),
         },
     }
-
     SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
     with SUMMARY_PATH.open("w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
-    return summary
+
+
+def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
+    bundle = _build_and_validate_bundle(campaign_id=campaign_id or str(uuid4()))
+    quality_checks: list[dict] = []
+    try:
+        generated = generate_synthetic_data(customer_count=200, seed=7)
+        quality_checks.append(validate_raw_contract(generated["raw"]))
+
+        feature_mart_path = build_feature_mart_snapshot(
+            raw_path=generated["raw"],
+            output_path=FEATURE_MART_PATH,
+            source_mode=FEATURE_SLICE_SOURCE,
+            run_id=bundle.run_id,
+        )
+        quality_checks.append(validate_feature_mart_contract(feature_mart_path))
+
+        embeddings_path, vector_size = build_embeddings(
+            feature_mart_path=feature_mart_path,
+            ollama_model=EMBEDDING_MODEL_VERSION,
+        )
+        quality_checks.append(
+            validate_embeddings_artifact(
+                embeddings_path=embeddings_path,
+                expected_emb_version=bundle.emb_version,
+            )
+        )
+        runtime_emb_version = read_embeddings_emb_version(embeddings_path)
+        if runtime_emb_version != bundle.emb_version:
+            raise ValueError(
+                "Embedding lineage mismatch at runtime: "
+                f"bundle.emb_version={bundle.emb_version!r}, "
+                f"runtime.emb_version={runtime_emb_version!r}"
+            )
+        index_meta = create_or_replace_index(
+            embeddings_path=embeddings_path,
+            vector_size=vector_size,
+            collection_name=bundle.concrete_qdrant_collection,
+            alias_name=bundle.index_alias,
+        )
+
+        query_customer = "cust_00000"
+        retrieved = retrieve_similar(
+            top_k=50,
+            query_customer_id=query_customer,
+            product_line="credit_card",
+            region_codes=["us_west", "us_central", "us_east"],
+            segment_ids=["mass", "affluent", "student", "smb"],
+            min_tenure_months=3,
+            max_delinquency_12m_count=2,
+        )
+        policy_input = _build_policy_input(retrieved)
+        policy_result = evaluate_policy(
+            candidates=policy_input,
+            policy_version=bundle.policy_version,
+            blacklist_path=BLACKLIST_PATH,
+            comm_history_path=COMM_HISTORY_PATH,
+            campaign_id=bundle.campaign_id,
+            requested_size=20,
+        )
+        export_ready = {
+            **policy_result,
+            "results": [
+                row for row in policy_result["results"] if row.get("selected", False)
+            ],
+        }
+        export_path = export_approved(
+            policy_result=export_ready, output_path=EXPORT_PATH
+        )
+        export_minio_uri = (
+            upload_export_to_minio(export_path=export_path, run_id=bundle.run_id)
+            if minio_is_configured()
+            else None
+        )
+        run_ts = datetime.now(timezone.utc).isoformat()
+        run_row, selected_rows, rejection_rows, decision_rows = _build_audit_rows(
+            retrieved=retrieved,
+            policy_result=policy_result,
+            bundle=bundle,
+            run_ts=run_ts,
+            product_id="minimal_slice",
+            channel="email",
+            resolved_collection=index_meta["collection"],
+        )
+        _write_audit_to_postgres(
+            run_row=run_row,
+            selected_rows=selected_rows,
+            rejection_rows=rejection_rows,
+            decision_rows=decision_rows,
+        )
+
+        summary = {
+            "run_ts": run_ts,
+            "status": "ok",
+            "versions": run_row["version_bundle"],
+            "inputs": {
+                "raw_path": str(RAW_PATH),
+                "feature_mart_path": str(feature_mart_path),
+                "embeddings_path": str(embeddings_path),
+                "blacklist_path": str(BLACKLIST_PATH),
+                "comm_history_path": str(COMM_HISTORY_PATH),
+            },
+            "quality": {
+                "status": "passed",
+                "checks": quality_checks,
+            },
+            "index": index_meta,
+            "retrieval": {
+                "query_customer_id": query_customer,
+                "retrieved_count": len(retrieved),
+            },
+            "policy": policy_result["summary"],
+            "export_path": str(export_path),
+            "export_minio_uri": export_minio_uri,
+            "audit": {
+                "postgres": {
+                    "run_table": "audience_run",
+                    "selected_rows_written": len(selected_rows),
+                    "rejection_summary_rows_written": len(rejection_rows),
+                    "policy_decision_rows_written": len(decision_rows),
+                }
+            },
+        }
+
+        SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with SUMMARY_PATH.open("w", encoding="utf-8") as f:
+            json.dump(summary, f, indent=2)
+        return summary
+    except DataQualityError as exc:
+        run_ts = datetime.now(timezone.utc).isoformat()
+        logger.error("Data quality gate failed: %s", exc)
+        _write_failure_summary(
+            bundle=bundle,
+            run_ts=run_ts,
+            quality_checks=quality_checks,
+            error=exc,
+        )
+        raise
 
 
 if __name__ == "__main__":

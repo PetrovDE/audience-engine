@@ -6,6 +6,7 @@ This repository provides two Compose stacks:
 - `infra/docker-compose.yml` for single-node, prod-shaped deployment.
 
 Both stacks keep Ollama external (`OLLAMA_BASE_URL`) and now use the same custom Airflow image build.
+Both stacks now also include API-key RBAC inputs for retrieval/admin role separation.
 
 ## 1) Why `_PIP_ADDITIONAL_REQUIREMENTS` Was Removed
 
@@ -55,6 +56,11 @@ This is intentionally not production-safe.
 ### Reference template
 
 - `infra/.env.example` remains a generic reference template.
+
+RBAC keys in env files:
+- `AE_CAMPAIGN_API_KEYS`: comma-separated keys for campaign-user retrieval access.
+- `AE_ADMIN_API_KEYS`: comma-separated keys for admin/operator lifecycle + audit APIs.
+- If both are unset, protected API routes fail closed (health endpoint remains open).
 
 ## 4) Development Workflow
 

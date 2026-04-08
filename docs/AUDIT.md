@@ -62,6 +62,19 @@ Primary key: (`run_id`, `reason_code`)
 
 Uniqueness: (`run_id`, `customer_id`)
 
+### `index_lifecycle_audit`
+- `id` (BIGSERIAL, PK)
+- `action` (TEXT, `validate_generation|promote_alias|rollback_alias`)
+- `alias_name` (TEXT)
+- `target_collection_name` (TEXT, nullable)
+- `previous_collection_name` (TEXT, nullable)
+- `actor_role` (TEXT)
+- `actor_id` (TEXT)
+- `outcome` (TEXT, `success|failed`)
+- `details` (JSONB)
+- `action_ts` (TIMESTAMPTZ)
+- `created_at` (TIMESTAMPTZ, default `now()`)
+
 ## Append-Only Enforcement
 All audit tables block `UPDATE` and `DELETE` via trigger `forbid_audience_audit_mutation()`.
 
@@ -70,6 +83,8 @@ All audit tables block `UPDATE` and `DELETE` via trigger `forbid_audience_audit_
 - Migration script: `infra/postgres/migrations/001_audit_sink.sql`
 - Init script: `infra/postgres/init/003_policy_decision_audit.sql`
 - Migration script: `infra/postgres/migrations/003_policy_decision_audit.sql`
+- Init script: `infra/postgres/init/004_index_lifecycle_audit.sql`
+- Migration script: `infra/postgres/migrations/004_index_lifecycle_audit.sql`
 
 ## Minimal Slice Runtime Behavior
 `pipelines/minimal_slice/run_flow.py` writes:
@@ -96,5 +111,12 @@ ORDER BY summary_ts DESC, reason_code;
 SELECT run_id, customer_id, decision, reason_codes, policy_version, emb_version, model_version
 FROM policy_decision_audit
 ORDER BY decision_ts DESC
+LIMIT 20;
+```
+
+```sql
+SELECT action, alias_name, target_collection_name, actor_role, actor_id, outcome, action_ts
+FROM index_lifecycle_audit
+ORDER BY action_ts DESC
 LIMIT 20;
 ```
