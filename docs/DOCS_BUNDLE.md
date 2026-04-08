@@ -14,11 +14,13 @@ Audience Engine is an open-source bank customer ranking and similarity platform 
 - PII must not be embedded or logged.
 - Required version lineage includes `fs_version`, `emb_version`, `policy_version`, and index alias/generation context.
 - API-key RBAC separates campaign retrieval access from admin lifecycle/audit operations.
+- API-first operator/admin control plane now defines one primary operator DAG and run trigger model.
 - Runtime data-quality gates validate raw/feature/embedding artifacts in the primary run path.
 - Lifecycle validate/promote/rollback operations converge through one audited control path (`lifecycle_service`) for API and system-triggered execution.
 
 Canonical references:
 - [ARCHITECTURE_V3.md](ARCHITECTURE_V3.md)
+- [OPERATIONAL_CONTROL_MODEL.md](OPERATIONAL_CONTROL_MODEL.md)
 - [GAP_REPORT_ARCH_VS_REPO.md](GAP_REPORT_ARCH_VS_REPO.md)
 
 ## VersionBundle (fs/emb/policy/index alias + generation)
@@ -70,6 +72,11 @@ Canonical references:
 8. Audit: run summary plus Postgres append-only audit records are persisted.
 9. Explain/read: retrieval API exposes `GET /v1/policy/decisions/{run_id}/{customer_id}` from audit storage.
 
+Operational control selection during run:
+- Policy version is selected from operator defaults or per-run override.
+- Integration profile is selected from the integration registry (`governance/integrations/integration_registry.yaml`) and must be marked `implemented`.
+- Run events are appended to `data/minimal_slice/control_plane/run_events.jsonl` for recent-run and failure visibility.
+
 Flow command:
 ```bash
 make demo
@@ -104,12 +111,26 @@ Lifecycle operations now have a protected API surface:
 - `POST /v1/admin/index/alias/rollback-latest`
 - `GET /v1/admin/index/lifecycle-audit`
 
+Operator control-plane APIs:
+- `GET /v1/admin/control-plane/model`
+- `GET|PUT /v1/admin/control-plane/defaults`
+- `GET /v1/admin/control-plane/integrations`
+- `GET /v1/admin/control-plane/policies`
+- `POST /v1/admin/runs/trigger`
+- `GET /v1/admin/runs/recent`
+- `GET /v1/admin/runs/latest-summary`
+
 System-triggered lifecycle operations remain allowed for trusted internal flows, but they use the same lifecycle service and lifecycle audit sink with explicit actor identities (`system:run_flow`, `system:airflow:<run_id>`, `system:makefile`).
+
+Airflow operational execution:
+- Primary operator DAG: `audience_engine_operator_main`
+- Legacy internal compatibility DAG: `audience_engine_minimal_slice_e2e`
 
 Canonical references:
 - [INDEX_LIFECYCLE.md](INDEX_LIFECYCLE.md)
 - [POLICY_ENGINE_SPEC.md](POLICY_ENGINE_SPEC.md)
 - [AUDIT.md](AUDIT.md)
+- [OPERATIONAL_CONTROL_MODEL.md](OPERATIONAL_CONTROL_MODEL.md)
 
 ## Demo + Smoke Tests and Expected Outputs
 Demo run:

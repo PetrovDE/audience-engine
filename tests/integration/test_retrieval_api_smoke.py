@@ -149,9 +149,189 @@ def test_campaign_role_cannot_access_admin_policy_decision(monkeypatch):
     assert "Admin/operator role is required" in response.text
 
 
+def test_control_plane_model_smoke(monkeypatch):
+    monkeypatch.setattr(
+        app_module.control_plane,
+        "describe_operational_model",
+        lambda: {
+            "primary_operator_pipeline_entrypoint": {
+                "airflow_dag_id": "audience_engine_operator_main"
+            }
+        },
+    )
+    response = client.get(
+        "/v1/admin/control-plane/model",
+        headers=_headers(ADMIN_KEY),
+    )
+    assert response.status_code == 200
+    assert (
+        response.json()["primary_operator_pipeline_entrypoint"]["airflow_dag_id"]
+        == "audience_engine_operator_main"
+    )
+
+
+def test_control_plane_defaults_get_update_smoke(monkeypatch):
+    monkeypatch.setattr(
+        app_module.control_plane,
+        "load_operator_defaults",
+        lambda: app_module.control_plane.OperatorDefaults(
+            default_policy_version="policy_credit_v1",
+            default_integration_profile_id="local_snapshot_local_export",
+        ),
+    )
+    monkeypatch.setattr(
+        app_module.control_plane,
+        "save_operator_defaults",
+        lambda default_policy_version=None,
+        default_integration_profile_id=None: app_module.control_plane.OperatorDefaults(
+            default_policy_version=default_policy_version or "policy_credit_v1",
+            default_integration_profile_id=default_integration_profile_id
+            or "local_snapshot_local_export",
+        ),
+    )
+    get_resp = client.get(
+        "/v1/admin/control-plane/defaults",
+        headers=_headers(ADMIN_KEY),
+    )
+    put_resp = client.put(
+        "/v1/admin/control-plane/defaults",
+        json={"default_integration_profile_id": "clickhouse_minio_export"},
+        headers=_headers(ADMIN_KEY),
+    )
+    assert get_resp.status_code == 200
+    assert get_resp.json()["default_policy_version"] == "policy_credit_v1"
+    assert put_resp.status_code == 200
+    assert (
+        put_resp.json()["default_integration_profile_id"] == "clickhouse_minio_export"
+    )
+
+
+def test_control_plane_integrations_policies_and_runs_smoke(monkeypatch):
+    monkeypatch.setattr(
+        app_module.control_plane,
+        "list_source_connectors",
+        lambda include_planned=True: [{"source_id": "snapshot_jsonl"}],
+    )
+    monkeypatch.setattr(
+        app_module.control_plane,
+        "list_export_targets",
+        lambda include_planned=True: [{"export_id": "local_jsonl"}],
+    )
+    monkeypatch.setattr(
+        app_module.control_plane,
+        "list_integration_profiles",
+        lambda include_planned=True: [{"profile_id": "local_snapshot_local_export"}],
+    )
+    monkeypatch.setattr(
+        app_module.control_plane,
+        "load_operator_defaults",
+        lambda: app_module.control_plane.OperatorDefaults(
+            default_policy_version="policy_credit_v1",
+            default_integration_profile_id="local_snapshot_local_export",
+        ),
+    )
+    monkeypatch.setattr(
+        app_module.control_plane,
+        "list_policies",
+        lambda: [{"policy_version": "policy_credit_v1", "status": "active"}],
+    )
+    monkeypatch.setattr(
+        app_module.control_plane,
+        "list_recent_run_events",
+        lambda limit=20: [{"run_id": "run-1", "status": "ok"}],
+    )
+    monkeypatch.setattr(
+        app_module,
+        "_load_latest_summary",
+        lambda: {"status": "ok", "versions": {"run_id": "run-1"}},
+    )
+    integrations_resp = client.get(
+        "/v1/admin/control-plane/integrations",
+        headers=_headers(ADMIN_KEY),
+    )
+    policies_resp = client.get(
+        "/v1/admin/control-plane/policies",
+        headers=_headers(ADMIN_KEY),
+    )
+    runs_resp = client.get(
+        "/v1/admin/runs/recent?limit=10",
+        headers=_headers(ADMIN_KEY),
+    )
+    summary_resp = client.get(
+        "/v1/admin/runs/latest-summary",
+        headers=_headers(ADMIN_KEY),
+    )
+    assert integrations_resp.status_code == 200
+    assert integrations_resp.json()["sources"][0]["source_id"] == "snapshot_jsonl"
+    assert policies_resp.status_code == 200
+    assert policies_resp.json()["default_policy_version"] == "policy_credit_v1"
+    assert runs_resp.status_code == 200
+    assert runs_resp.json()["count"] == 1
+    assert summary_resp.status_code == 200
+    assert summary_resp.json()["versions"]["run_id"] == "run-1"
+
+
+def test_trigger_operator_run_smoke(monkeypatch):
+    monkeypatch.setattr(
+        app_module.run_flow,
+        "run_minimal_vertical_slice",
+        lambda campaign_id=None,
+        policy_version=None,
+        integration_profile_id=None,
+        requested_size=20: {
+            "status": "ok",
+            "versions": {
+                "run_id": "e0f62885-0dbc-4d53-b1d5-59fd0be558e2",
+                "campaign_id": campaign_id or "camp_default",
+                "policy_version": policy_version or "policy_credit_v1",
+            },
+            "operations": {
+                "integration_profile_id": integration_profile_id
+                or "local_snapshot_local_export"
+            },
+        },
+    )
+    response = client.post(
+        "/v1/admin/runs/trigger",
+        json={
+            "campaign_id": "camp_manual",
+            "policy_version": "policy_credit_v1",
+            "integration_profile_id": "local_snapshot_local_export",
+            "requested_size": 25,
+        },
+        headers=_headers(ADMIN_KEY),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["campaign_id"] == "camp_manual"
+    assert body["integration_profile_id"] == "local_snapshot_local_export"
+
+
+def test_campaign_role_cannot_update_defaults_or_trigger_run():
+    defaults_resp = client.put(
+        "/v1/admin/control-plane/defaults",
+        json={"default_policy_version": "policy_credit_v1"},
+        headers=_headers(CAMPAIGN_KEY),
+    )
+    trigger_resp = client.post(
+        "/v1/admin/runs/trigger",
+        json={"campaign_id": "camp_x"},
+        headers=_headers(CAMPAIGN_KEY),
+    )
+    assert defaults_resp.status_code == 403
+    assert trigger_resp.status_code == 403
+
+
 @pytest.mark.parametrize(
     ("method", "path"),
     [
+        ("get", "/v1/admin/control-plane/model"),
+        ("get", "/v1/admin/control-plane/defaults"),
+        ("get", "/v1/admin/control-plane/integrations"),
+        ("get", "/v1/admin/control-plane/policies"),
+        ("get", "/v1/admin/runs/recent"),
+        ("get", "/v1/admin/runs/latest-summary"),
         ("get", "/v1/admin/index/generations/latest"),
         ("get", "/v1/admin/index/generations"),
         ("post", "/v1/admin/index/generations/validate-latest"),

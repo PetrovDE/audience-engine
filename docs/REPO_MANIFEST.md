@@ -28,6 +28,7 @@
 - `docs/INDEX.md`
 - `docs/DOCS_BUNDLE.md`
 - `docs/ARCHITECTURE_V3.md`
+- `docs/OPERATIONAL_CONTROL_MODEL.md`
 - `docs/AUDIT.md`
 - `docs/BENCHMARKS.md`
 - `docs/BUILD_PLAN.md`

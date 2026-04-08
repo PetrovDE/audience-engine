@@ -1,0 +1,126 @@
+version: 1
+registry: integration_registry
+owner: platform-operations
+updated_at: 2026-04-08
+sources:
+  - source_id: snapshot_jsonl
+    display_name: Local Snapshot JSONL
+    kind: source
+    implementation_status: implemented
+    supported_modes:
+      - minimal_slice
+    description: Build feature mart from locally generated governed snapshot JSONL.
+    config:
+      source_mode: snapshot
+      required_env: []
+
+  - source_id: clickhouse_feature_slice
+    display_name: ClickHouse Feature Slice
+    kind: source
+    implementation_status: implemented
+    supported_modes:
+      - minimal_slice
+    description: Build feature mart from ClickHouse query configured via CLICKHOUSE_* env vars.
+    config:
+      source_mode: clickhouse
+      required_env:
+        - CLICKHOUSE_HOST
+        - CLICKHOUSE_DB
+        - CLICKHOUSE_USER
+
+  - source_id: crm_salesforce
+    display_name: Salesforce CRM
+    kind: source
+    implementation_status: planned
+    supported_modes:
+      - future
+    description: Planned CRM source connector (not implemented in this phase).
+    config:
+      source_mode: planned
+
+  - source_id: acrm_internal
+    display_name: Internal ACRM
+    kind: source
+    implementation_status: planned
+    supported_modes:
+      - future
+    description: Planned ACRM source connector (not implemented in this phase).
+    config:
+      source_mode: planned
+
+  - source_id: dwh_snowflake
+    display_name: Snowflake DWH
+    kind: source
+    implementation_status: planned
+    supported_modes:
+      - future
+    description: Planned DWH source connector (not implemented in this phase).
+    config:
+      source_mode: planned
+
+exports:
+  - export_id: local_jsonl
+    display_name: Local JSONL Export
+    kind: export
+    implementation_status: implemented
+    description: Write approved audience rows to local JSONL path.
+    config:
+      write_local_file: true
+      upload_to_minio: false
+
+  - export_id: minio_jsonl
+    display_name: MinIO JSONL Export
+    kind: export
+    implementation_status: implemented
+    description: Write approved audience locally then upload to MinIO object storage.
+    config:
+      write_local_file: true
+      upload_to_minio: true
+      required_env:
+        - MINIO_ENDPOINT
+        - MINIO_ACCESS_KEY
+        - MINIO_SECRET_KEY
+        - MINIO_BUCKET
+
+  - export_id: crm_salesforce_audience
+    display_name: Salesforce Audience Push
+    kind: export
+    implementation_status: planned
+    description: Planned direct CRM audience export connector.
+    config:
+      write_local_file: false
+
+profiles:
+  - profile_id: local_snapshot_local_export
+    display_name: Local Snapshot to Local Export
+    implementation_status: implemented
+    source_id: snapshot_jsonl
+    export_id: local_jsonl
+    field_mapping:
+      customer_key: customer_id
+      score_key: score
+      segmentation_keys:
+        - product_line
+        - region_code
+        - segment_id
+
+  - profile_id: clickhouse_minio_export
+    display_name: ClickHouse to MinIO Export
+    implementation_status: implemented
+    source_id: clickhouse_feature_slice
+    export_id: minio_jsonl
+    field_mapping:
+      customer_key: customer_id
+      score_key: score
+      segmentation_keys:
+        - product_line
+        - region_code
+        - segment_id
+
+  - profile_id: salesforce_future_profile
+    display_name: Salesforce CRM Future Profile
+    implementation_status: planned
+    source_id: crm_salesforce
+    export_id: crm_salesforce_audience
+    field_mapping:
+      customer_key: external_customer_id

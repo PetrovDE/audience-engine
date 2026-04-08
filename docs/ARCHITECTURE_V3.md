@@ -77,7 +77,10 @@ This section records implementation status against V3 constraints so architectur
 - Alias switching exists for serving (`audience-serving` -> active collection).
 - A policy check step runs before export in the minimal vertical slice flow.
 - Governance registries and contracts exist under `governance/`.
+- Integration registry exists (`governance/integrations/integration_registry.yaml`) with implemented vs planned connector/profile status.
+- API-first operator/admin control-plane endpoints exist in retrieval API (`/v1/admin/control-plane/*`, `/v1/admin/runs/*`).
 - Infra presence exists for Postgres, Redis, MinIO, ClickHouse, Qdrant, Airflow, Prometheus, and Grafana.
+- Airflow includes an explicit operator-facing DAG (`audience_engine_operator_main`) and a legacy internal compatibility DAG (`audience_engine_minimal_slice_e2e`).
 
 ### Partially Implemented / Divergent from V3
 - Ollama is now externalized from compose; runtime enforces local GPU preflight when `OLLAMA_BASE_URL` is local, but does not remotely attest GPU state on external Ollama hosts.

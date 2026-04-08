@@ -19,6 +19,7 @@ Out of scope:
 ## Current Minimal-Slice Runtime Status (as built)
 Implemented now:
 - Policy evaluation in `pipelines/minimal_slice/policy_engine.py` is runtime-active in the vertical slice.
+- Operator/admin control plane can select policy per run (`POST /v1/admin/runs/trigger`) or via operator defaults (`PUT /v1/admin/control-plane/defaults`).
 - Required input contract is enforced fail-closed for:
   - `blacklist` (file-based source in minimal slice)
   - `communication_history` (JSONL source in minimal slice)

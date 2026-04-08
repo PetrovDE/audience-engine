@@ -1,13 +1,14 @@
 import json
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from prometheus_client import make_asgi_app
 from pydantic import BaseModel, Field
 
-from pipelines.minimal_slice import lifecycle_service
+from pipelines.minimal_slice import control_plane, lifecycle_service, run_flow
 from pipelines.minimal_slice.config import SUMMARY_PATH
+from pipelines.minimal_slice.data_quality import DataQualityError
 from pipelines.minimal_slice.lifecycle_service import LifecycleActor
 from pipelines.minimal_slice.policy_decision_audit import fetch_policy_decision_audit
 from pipelines.minimal_slice.retrieval import retrieve_similar
@@ -40,6 +41,18 @@ class RetrieveRequest(BaseModel):
     policy_version: Optional[str] = None
 
 
+class OperatorDefaultsUpdateRequest(BaseModel):
+    default_policy_version: Optional[str] = None
+    default_integration_profile_id: Optional[str] = None
+
+
+class TriggerRunRequest(BaseModel):
+    campaign_id: Optional[str] = None
+    policy_version: Optional[str] = None
+    integration_profile_id: Optional[str] = None
+    requested_size: int = Field(default=20, ge=1, le=500)
+
+
 @app.get("/healthz")
 def healthz() -> dict:
     bundle = _load_latest_version_bundle()
@@ -58,6 +71,16 @@ def _load_latest_version_bundle() -> Optional[VersionBundle]:
         return VersionBundle(**versions)
     except TypeError:
         return None
+
+
+def _load_latest_summary() -> Optional[dict[str, Any]]:
+    if not SUMMARY_PATH.exists():
+        return None
+    with SUMMARY_PATH.open("r", encoding="utf-8") as f:
+        payload = json.load(f)
+    if not isinstance(payload, dict):
+        return None
+    return payload
 
 
 @app.post("/v1/retrieve")
@@ -125,6 +148,141 @@ def get_policy_decision(
 
 def _lifecycle_actor(principal: Principal) -> LifecycleActor:
     return LifecycleActor(role=principal.role.value, actor_id=principal.actor_id)
+
+
+@app.get("/v1/admin/control-plane/model")
+def get_operational_control_model(
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    return control_plane.describe_operational_model()
+
+
+@app.get("/v1/admin/control-plane/defaults")
+def get_operator_defaults(
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    defaults = control_plane.load_operator_defaults()
+    return {
+        "default_policy_version": defaults.default_policy_version,
+        "default_integration_profile_id": defaults.default_integration_profile_id,
+    }
+
+
+@app.put("/v1/admin/control-plane/defaults")
+def update_operator_defaults(
+    request: OperatorDefaultsUpdateRequest,
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    if (
+        request.default_policy_version is None
+        and request.default_integration_profile_id is None
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Provide default_policy_version and/or default_integration_profile_id."
+            ),
+        )
+    try:
+        defaults = control_plane.save_operator_defaults(
+            default_policy_version=request.default_policy_version,
+            default_integration_profile_id=request.default_integration_profile_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "default_policy_version": defaults.default_policy_version,
+        "default_integration_profile_id": defaults.default_integration_profile_id,
+    }
+
+
+@app.get("/v1/admin/control-plane/integrations")
+def list_integrations(
+    include_planned: bool = Query(default=True),
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    return {
+        "sources": control_plane.list_source_connectors(
+            include_planned=include_planned
+        ),
+        "exports": control_plane.list_export_targets(include_planned=include_planned),
+        "profiles": control_plane.list_integration_profiles(
+            include_planned=include_planned
+        ),
+    }
+
+
+@app.get("/v1/admin/control-plane/policies")
+def list_control_plane_policies(
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    defaults = control_plane.load_operator_defaults()
+    policies = control_plane.list_policies()
+    return {
+        "default_policy_version": defaults.default_policy_version,
+        "policies": policies,
+    }
+
+
+@app.get("/v1/admin/runs/latest-summary")
+def get_latest_run_summary(
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    summary = _load_latest_summary()
+    if summary is None:
+        raise HTTPException(status_code=404, detail="No run summary available yet.")
+    return summary
+
+
+@app.get("/v1/admin/runs/recent")
+def list_recent_runs(
+    limit: int = Query(default=20, ge=1, le=200),
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    try:
+        rows = control_plane.list_recent_run_events(limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"count": len(rows), "runs": rows}
+
+
+@app.post("/v1/admin/runs/trigger")
+def trigger_operator_run(
+    request: TriggerRunRequest,
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    try:
+        summary = run_flow.run_minimal_vertical_slice(
+            campaign_id=request.campaign_id,
+            policy_version=request.policy_version,
+            integration_profile_id=request.integration_profile_id,
+            requested_size=request.requested_size,
+        )
+    except DataQualityError as exc:
+        raise HTTPException(status_code=422, detail=exc.to_dict()) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    versions = summary.get("versions", {})
+    return {
+        "status": summary.get("status"),
+        "run_id": versions.get("run_id"),
+        "campaign_id": versions.get("campaign_id"),
+        "policy_version": versions.get("policy_version"),
+        "integration_profile_id": summary.get("operations", {}).get(
+            "integration_profile_id"
+        ),
+        "summary": summary,
+    }
 
 
 @app.get("/v1/admin/index/generations/latest")

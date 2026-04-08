@@ -62,6 +62,11 @@ RBAC keys in env files:
 - `AE_ADMIN_API_KEYS`: comma-separated keys for admin/operator lifecycle + audit APIs.
 - If both are unset, protected API routes fail closed (health endpoint remains open).
 
+Operator control-plane runtime state:
+- Operator defaults file: `data/minimal_slice/control_plane/operator_state.json`
+- Run events log: `data/minimal_slice/control_plane/run_events.jsonl`
+- Persist this path with your application data volume strategy if you need continuity of operator defaults and recent-run history.
+
 ## 4) Development Workflow
 
 Start core services:
@@ -129,6 +134,12 @@ The Airflow 3 split is unchanged:
 - `airflow-scheduler`
 - `airflow-dag-processor`
 - `airflow-triggerer`
+
+Primary operator DAG:
+- `audience_engine_operator_main`
+
+Legacy internal compatibility DAG:
+- `audience_engine_minimal_slice_e2e` (internal/manual compatibility path)
 
 ## 7) Build and Validation Commands
 

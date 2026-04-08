@@ -93,6 +93,10 @@ All audit tables block `UPDATE` and `DELETE` via trigger `forbid_audience_audit_
 3. one `audience_run_rejections_summary` row per rejection reason code.
 4. one `policy_decision_audit` row per evaluated customer decision.
 
+Operational control-plane run history is also appended to:
+- `data/minimal_slice/control_plane/run_events.jsonl`
+- This file is for operator recent-run visibility (including failed runs) and does not replace durable Postgres audit tables.
+
 Lifecycle actions (`validate_generation`, `promote_alias`, `rollback_alias`) write `index_lifecycle_audit` rows through `pipelines/minimal_slice/lifecycle_service.py` for both admin and system-triggered flows.
 
 Actor identity conventions:

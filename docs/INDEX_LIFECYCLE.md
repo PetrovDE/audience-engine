@@ -60,6 +60,8 @@ All real lifecycle entry paths now converge through `pipelines/minimal_slice/lif
 - Retrieval API admin endpoints (`/v1/admin/index/...`) call lifecycle service with admin actor identity.
 - Minimal slice runtime (`pipelines/minimal_slice/run_flow.py`) calls lifecycle service with actor `system:run_flow`.
 - Airflow DAG (`pipelines/airflow_dags/audience_engine_dags.py`) calls lifecycle service with actor `system:airflow:<run_id>`.
+  - Primary operator DAG: `audience_engine_operator_main`
+  - Legacy internal compatibility DAG: `audience_engine_minimal_slice_e2e`
 - Make/CLI lifecycle targets (`make validate-index`, `make promote-index`, `make rollback-index`) call lifecycle service with actor `system:makefile`.
 
 `qdrant_index.py` lifecycle functions remain low-level primitives. They are not the operational control boundary for validate/promote/rollback.

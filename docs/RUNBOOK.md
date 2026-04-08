@@ -5,6 +5,42 @@ For monitoring dashboards and metrics triage, see the root runbook: `../RUNBOOK.
 Index generation lifecycle SOP moved to `docs/INDEX_LIFECYCLE.md`.
 Host/bootstrap deployment steps moved to `docs/DEPLOYMENT.md`.
 
+## Operator Workflow (Primary)
+Use this sequence for operational usage.
+
+1. Inspect control model and current defaults:
+   ```bash
+   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" http://localhost:8000/v1/admin/control-plane/model
+   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" http://localhost:8000/v1/admin/control-plane/defaults
+   ```
+2. Inspect implemented integrations and policies:
+   ```bash
+   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" "http://localhost:8000/v1/admin/control-plane/integrations?include_planned=false"
+   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" http://localhost:8000/v1/admin/control-plane/policies
+   ```
+3. (Optional) Update operator defaults:
+   ```bash
+   curl -X PUT -H "X-AE-API-Key: ${AE_ADMIN_KEY}" -H "Content-Type: application/json" \
+     -d '{"default_policy_version":"policy_credit_v1","default_integration_profile_id":"local_snapshot_local_export"}' \
+     http://localhost:8000/v1/admin/control-plane/defaults
+   ```
+4. Trigger main run (policy/profile can be overridden per run):
+   ```bash
+   curl -X POST -H "X-AE-API-Key: ${AE_ADMIN_KEY}" -H "Content-Type: application/json" \
+     -d '{"campaign_id":"camp_ops_001","policy_version":"policy_credit_v1","integration_profile_id":"local_snapshot_local_export","requested_size":20}' \
+     http://localhost:8000/v1/admin/runs/trigger
+   ```
+5. Monitor run and export status:
+   ```bash
+   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" http://localhost:8000/v1/admin/runs/latest-summary
+   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" "http://localhost:8000/v1/admin/runs/recent?limit=20"
+   ```
+6. Inspect lifecycle and policy audit if needed:
+   ```bash
+   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" "http://localhost:8000/v1/admin/index/lifecycle-audit?limit=20"
+   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" http://localhost:8000/v1/policy/decisions/<run_id>/<customer_id>
+   ```
+
 ## Audit Sink Bring-up
 1. Start infra:
    ```bash
@@ -120,18 +156,22 @@ Examples:
 
 ## Airflow E2E DAG Trigger + Monitor
 
-Real minimal-slice DAG:
-- DAG id: `audience_engine_minimal_slice_e2e`
+Primary operator DAG:
+- DAG id: `audience_engine_operator_main`
 - File: `pipelines/airflow_dags/audience_engine_dags.py`
+
+Legacy internal compatibility DAG:
+- DAG id: `audience_engine_minimal_slice_e2e` (internal/manual compatibility path)
 
 Manual trigger from scheduler container:
 ```bash
 docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml exec airflow-scheduler \
-  airflow dags trigger audience_engine_minimal_slice_e2e
+  airflow dags trigger audience_engine_operator_main \
+  --conf '{"campaign_id":"camp_airflow_ops_001","policy_version":"policy_credit_v1","integration_profile_id":"local_snapshot_local_export","requested_size":20}'
 ```
 
 List active runs:
 ```bash
 docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml exec airflow-scheduler \
-  airflow dags list-runs -d audience_engine_minimal_slice_e2e
+  airflow dags list-runs -d audience_engine_operator_main
 ```

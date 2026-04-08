@@ -13,7 +13,7 @@ from pipelines.version_bundle import (
     preflight_version_bundle,
 )
 
-from . import lifecycle_service
+from . import control_plane, integrations, lifecycle_service
 from .config import (
     BLACKLIST_PATH,
     COMM_HISTORY_PATH,
@@ -22,9 +22,7 @@ from .config import (
     EXPORT_PATH,
     FEATURE_MART_PATH,
     FEATURE_SET_PATH,
-    FEATURE_SLICE_SOURCE,
     GOVERNANCE_DIR,
-    POLICY_VERSION,
     POSTGRES_DB,
     POSTGRES_HOST,
     POSTGRES_PASSWORD,
@@ -41,8 +39,6 @@ from .data_quality import (
     validate_raw_contract,
 )
 from .embedding import build_embeddings, read_embeddings_emb_version
-from .exporter import export_approved
-from .feature_mart import build_feature_mart_snapshot
 from .lifecycle_service import build_system_actor
 from .policy_decision_audit import (
     build_policy_decision_audit_rows,
@@ -51,7 +47,6 @@ from .policy_decision_audit import (
 from .policy_engine import evaluate_policy
 from .qdrant_index import build_generation
 from .retrieval import retrieve_similar
-from .storage import minio_is_configured, upload_export_to_minio
 from .synthetic_data import generate_synthetic_data
 
 logger = logging.getLogger(__name__)
@@ -63,10 +58,12 @@ def _load_feature_set_version() -> str:
     return fs["fs_version"]
 
 
-def _build_and_validate_bundle(campaign_id: str) -> VersionBundle:
+def _build_and_validate_bundle(
+    campaign_id: str, *, policy_version: str
+) -> VersionBundle:
     bundle = build_version_bundle(
         fs_version=_load_feature_set_version(),
-        policy_version=POLICY_VERSION,
+        policy_version=policy_version,
         index_alias=QDRANT_ALIAS,
         campaign_id=campaign_id,
         embedding_spec_path=EMBED_SPEC_PATH,
@@ -116,6 +113,8 @@ def _build_audit_rows(
     product_id: str,
     channel: str,
     resolved_collection: str,
+    operation_context: dict,
+    export_context: dict,
 ) -> tuple[dict, list[tuple], list[tuple], list[tuple]]:
     ranking: dict[str, tuple[float, int]] = {}
     for idx, row in enumerate(retrieved, start=1):
@@ -164,6 +163,8 @@ def _build_audit_rows(
             "requested_size": len(selected_rows),
             "policy_rejection_summary": dict(reject_counts),
             "policy_status": policy_result.get("status", "unknown"),
+            "operation_context": operation_context,
+            "export_context": export_context,
         },
     }
     decision_rows = build_policy_decision_audit_rows(
@@ -262,10 +263,12 @@ def _write_failure_summary(
     run_ts: str,
     quality_checks: list[dict],
     error: DataQualityError,
-) -> None:
+    operation_context: dict,
+) -> dict:
     summary = {
         "run_ts": run_ts,
         "status": "failed",
+        "operations": operation_context,
         "versions": {
             "fs_version": bundle.fs_version,
             "emb_version": bundle.emb_version,
@@ -285,21 +288,82 @@ def _write_failure_summary(
     SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
     with SUMMARY_PATH.open("w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
+    return summary
 
 
-def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
-    bundle = _build_and_validate_bundle(campaign_id=campaign_id or str(uuid4()))
+def _append_run_event(
+    *,
+    summary: dict,
+    operation_context: dict,
+    trigger_source: str,
+) -> None:
+    versions = summary.get("versions") if isinstance(summary, dict) else {}
+    quality = summary.get("quality") if isinstance(summary, dict) else {}
+    export = summary.get("export") if isinstance(summary, dict) else {}
+    event = {
+        "event_ts": datetime.now(timezone.utc).isoformat(),
+        "trigger_source": trigger_source,
+        "status": summary.get("status"),
+        "run_ts": summary.get("run_ts"),
+        "run_id": versions.get("run_id") if isinstance(versions, dict) else None,
+        "campaign_id": (
+            versions.get("campaign_id") if isinstance(versions, dict) else None
+        ),
+        "policy_version": (
+            versions.get("policy_version") if isinstance(versions, dict) else None
+        ),
+        "emb_version": versions.get("emb_version")
+        if isinstance(versions, dict)
+        else None,
+        "integration_profile_id": operation_context.get("integration_profile_id"),
+        "source_id": operation_context.get("source_id"),
+        "export_id": operation_context.get("export_id"),
+        "quality_status": quality.get("status") if isinstance(quality, dict) else None,
+        "export_status": export.get("status") if isinstance(export, dict) else None,
+        "export_uri": export.get("export_uri") if isinstance(export, dict) else None,
+        "error": quality.get("error") if isinstance(quality, dict) else None,
+    }
+    control_plane.append_run_event(event)
+
+
+def run_minimal_vertical_slice(
+    campaign_id: str | None = None,
+    *,
+    policy_version: str | None = None,
+    integration_profile_id: str | None = None,
+    requested_size: int = 20,
+) -> dict:
+    run_config = control_plane.resolve_run_configuration(
+        policy_version=policy_version,
+        integration_profile_id=integration_profile_id,
+    )
+    bundle = _build_and_validate_bundle(
+        campaign_id=campaign_id or str(uuid4()),
+        policy_version=run_config.policy_version,
+    )
+    operation_context = {
+        "policy_version": run_config.policy_version,
+        "policy_selection_source": run_config.policy_selection_source,
+        "integration_profile_id": run_config.integration_profile_id,
+        "integration_selection_source": run_config.integration_selection_source,
+        "source_id": run_config.source_id,
+        "export_id": run_config.export_id,
+        "requested_size": requested_size,
+    }
     quality_checks: list[dict] = []
     try:
         generated = generate_synthetic_data(customer_count=200, seed=7)
         quality_checks.append(validate_raw_contract(generated["raw"]))
 
-        feature_mart_path = build_feature_mart_snapshot(
-            raw_path=generated["raw"],
-            output_path=FEATURE_MART_PATH,
-            source_mode=FEATURE_SLICE_SOURCE,
-            run_id=bundle.run_id,
+        feature_mart_path, integration_meta = (
+            integrations.build_feature_mart_for_profile(
+                raw_path=generated["raw"],
+                output_path=FEATURE_MART_PATH,
+                profile_id=run_config.integration_profile_id,
+                run_id=bundle.run_id,
+            )
         )
+        operation_context.update(integration_meta)
         quality_checks.append(validate_feature_mart_contract(feature_mart_path))
 
         embeddings_path, vector_size = build_embeddings(
@@ -343,6 +407,9 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
             segment_ids=["mass", "affluent", "student", "smb"],
             min_tenure_months=3,
             max_delinquency_12m_count=2,
+            fs_version=bundle.fs_version,
+            emb_version=bundle.emb_version,
+            policy_version=bundle.policy_version,
         )
         policy_input = _build_policy_input(retrieved)
         policy_result = evaluate_policy(
@@ -351,7 +418,7 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
             blacklist_path=BLACKLIST_PATH,
             comm_history_path=COMM_HISTORY_PATH,
             campaign_id=bundle.campaign_id,
-            requested_size=20,
+            requested_size=requested_size,
         )
         export_ready = {
             **policy_result,
@@ -359,13 +426,11 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
                 row for row in policy_result["results"] if row.get("selected", False)
             ],
         }
-        export_path = export_approved(
-            policy_result=export_ready, output_path=EXPORT_PATH
-        )
-        export_minio_uri = (
-            upload_export_to_minio(export_path=export_path, run_id=bundle.run_id)
-            if minio_is_configured()
-            else None
+        export_result = integrations.export_for_profile(
+            profile_id=run_config.integration_profile_id,
+            policy_result=export_ready,
+            run_id=bundle.run_id,
+            output_path=EXPORT_PATH,
         )
         run_ts = datetime.now(timezone.utc).isoformat()
         run_row, selected_rows, rejection_rows, decision_rows = _build_audit_rows(
@@ -376,6 +441,8 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
             product_id="minimal_slice",
             channel="email",
             resolved_collection=index_meta["collection"],
+            operation_context=operation_context,
+            export_context=export_result,
         )
         _write_audit_to_postgres(
             run_row=run_row,
@@ -387,6 +454,7 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
         summary = {
             "run_ts": run_ts,
             "status": "ok",
+            "operations": operation_context,
             "versions": run_row["version_bundle"],
             "inputs": {
                 "raw_path": str(RAW_PATH),
@@ -405,8 +473,9 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
                 "retrieved_count": len(retrieved),
             },
             "policy": policy_result["summary"],
-            "export_path": str(export_path),
-            "export_minio_uri": export_minio_uri,
+            "export_path": export_result["export_path"],
+            "export_minio_uri": export_result["export_uri"],
+            "export": export_result,
             "audit": {
                 "postgres": {
                     "run_table": "audience_run",
@@ -420,15 +489,61 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
         SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
         with SUMMARY_PATH.open("w", encoding="utf-8") as f:
             json.dump(summary, f, indent=2)
+        _append_run_event(
+            summary=summary,
+            operation_context=operation_context,
+            trigger_source="system:run_flow",
+        )
         return summary
     except DataQualityError as exc:
         run_ts = datetime.now(timezone.utc).isoformat()
         logger.error("Data quality gate failed: %s", exc)
-        _write_failure_summary(
+        failure_summary = _write_failure_summary(
             bundle=bundle,
             run_ts=run_ts,
             quality_checks=quality_checks,
             error=exc,
+            operation_context=operation_context,
+        )
+        _append_run_event(
+            summary=failure_summary,
+            operation_context=operation_context,
+            trigger_source="system:run_flow",
+        )
+        raise
+    except Exception as exc:
+        run_ts = datetime.now(timezone.utc).isoformat()
+        logger.error("Run failed: %s", exc)
+        failure_summary = {
+            "run_ts": run_ts,
+            "status": "failed",
+            "operations": operation_context,
+            "versions": {
+                "fs_version": bundle.fs_version,
+                "emb_version": bundle.emb_version,
+                "model_version": bundle.model_version,
+                "policy_version": bundle.policy_version,
+                "index_alias": bundle.index_alias,
+                "concrete_qdrant_collection": bundle.concrete_qdrant_collection,
+                "run_id": bundle.run_id,
+                "campaign_id": bundle.campaign_id,
+            },
+            "quality": {
+                "status": "failed",
+                "checks": quality_checks,
+                "error": {
+                    "code": "RUN_FAILED_INTERNAL",
+                    "detail": str(exc),
+                },
+            },
+        }
+        SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with SUMMARY_PATH.open("w", encoding="utf-8") as f:
+            json.dump(failure_summary, f, indent=2)
+        _append_run_event(
+            summary=failure_summary,
+            operation_context=operation_context,
+            trigger_source="system:run_flow",
         )
         raise
 

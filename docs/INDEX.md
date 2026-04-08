@@ -11,6 +11,7 @@ This is the canonical table of contents for `docs/`.
 
 ## Architecture
 - [ARCHITECTURE_V3.md](ARCHITECTURE_V3.md) (canonical architecture baseline)
+- [OPERATIONAL_CONTROL_MODEL.md](OPERATIONAL_CONTROL_MODEL.md) (operator/admin control-plane model)
 - [GAP_REPORT_ARCH_VS_REPO.md](GAP_REPORT_ARCH_VS_REPO.md)
 - [SCALE_10M.md](SCALE_10M.md)
 

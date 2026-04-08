@@ -111,6 +111,16 @@ curl -H "X-AE-API-Key: campaign_local_key" -H "Content-Type: application/json" \
 
 curl -H "X-AE-API-Key: admin_local_key" \
   http://localhost:8000/v1/admin/index/generations/latest
+
+curl -H "X-AE-API-Key: admin_local_key" \
+  http://localhost:8000/v1/admin/control-plane/model
+
+curl -H "X-AE-API-Key: admin_local_key" \
+  http://localhost:8000/v1/admin/control-plane/integrations
+
+curl -X POST -H "X-AE-API-Key: admin_local_key" -H "Content-Type: application/json" \
+  -d '{"campaign_id":"camp_manual","policy_version":"policy_credit_v1","integration_profile_id":"local_snapshot_local_export","requested_size":20}' \
+  http://localhost:8000/v1/admin/runs/trigger
 ```
 
 Minimal slice demo flow:
@@ -127,5 +137,6 @@ make build-index
 ```
 
 Airflow end-to-end DAG (real minimal-slice chain):
-- DAG id: `audience_engine_minimal_slice_e2e`
+- Primary operator-facing DAG id: `audience_engine_operator_main`
+- Legacy internal compatibility DAG id: `audience_engine_minimal_slice_e2e` (manual/internal)
 - Defined in: `pipelines/airflow_dags/audience_engine_dags.py`

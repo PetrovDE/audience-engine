@@ -6,9 +6,20 @@ import pytest
 
 pytest.importorskip("psycopg")
 
-from pipelines.minimal_slice import run_flow
+from pipelines.minimal_slice import control_plane, run_flow
 from pipelines.minimal_slice.data_quality import DataQualityError
 from pipelines.version_bundle import VersionBundle
+
+
+def _run_config() -> control_plane.OperationalRunConfig:
+    return control_plane.OperationalRunConfig(
+        policy_version="policy_credit_v1",
+        policy_selection_source="operator_default",
+        integration_profile_id="local_snapshot_local_export",
+        integration_selection_source="operator_default",
+        source_id="snapshot_jsonl",
+        export_id="local_jsonl",
+    )
 
 
 def test_run_flow_fails_when_runtime_embedding_lineage_mismatches_bundle(
@@ -35,7 +46,14 @@ def test_run_flow_fails_when_runtime_embedding_lineage_mismatches_bundle(
     )
 
     monkeypatch.setattr(
-        run_flow, "_build_and_validate_bundle", lambda campaign_id: bundle
+        run_flow.control_plane,
+        "resolve_run_configuration",
+        lambda policy_version, integration_profile_id: _run_config(),
+    )
+    monkeypatch.setattr(
+        run_flow,
+        "_build_and_validate_bundle",
+        lambda campaign_id, policy_version: bundle,
     )
     monkeypatch.setattr(
         run_flow,
@@ -60,9 +78,16 @@ def test_run_flow_fails_when_runtime_embedding_lineage_mismatches_bundle(
         lambda embeddings_path, expected_emb_version=None: {"status": "passed"},
     )
     monkeypatch.setattr(
-        run_flow,
-        "build_feature_mart_snapshot",
-        lambda raw_path, output_path, source_mode, run_id: feature_mart_path,
+        run_flow.integrations,
+        "build_feature_mart_for_profile",
+        lambda profile_id, raw_path, output_path, run_id: (
+            feature_mart_path,
+            {
+                "profile_id": profile_id,
+                "source_id": "snapshot_jsonl",
+                "export_id": "local_jsonl",
+            },
+        ),
     )
     monkeypatch.setattr(
         run_flow,
@@ -103,7 +128,14 @@ def test_run_flow_fails_early_on_raw_data_quality_violation(monkeypatch, tmp_pat
         )
 
     monkeypatch.setattr(
-        run_flow, "_build_and_validate_bundle", lambda campaign_id: bundle
+        run_flow.control_plane,
+        "resolve_run_configuration",
+        lambda policy_version, integration_profile_id: _run_config(),
+    )
+    monkeypatch.setattr(
+        run_flow,
+        "_build_and_validate_bundle",
+        lambda campaign_id, policy_version: bundle,
     )
     monkeypatch.setattr(
         run_flow,
@@ -115,7 +147,9 @@ def test_run_flow_fails_early_on_raw_data_quality_violation(monkeypatch, tmp_pat
         },
     )
     monkeypatch.setattr(
-        run_flow, "build_feature_mart_snapshot", _unexpected_feature_mart
+        run_flow.integrations,
+        "build_feature_mart_for_profile",
+        _unexpected_feature_mart,
     )
     monkeypatch.setattr(run_flow, "SUMMARY_PATH", summary_path)
 
@@ -152,7 +186,14 @@ def test_run_flow_uses_audited_lifecycle_service_path(monkeypatch, tmp_path):
     calls: list[str] = []
 
     monkeypatch.setattr(
-        run_flow, "_build_and_validate_bundle", lambda campaign_id: bundle
+        run_flow.control_plane,
+        "resolve_run_configuration",
+        lambda policy_version, integration_profile_id: _run_config(),
+    )
+    monkeypatch.setattr(
+        run_flow,
+        "_build_and_validate_bundle",
+        lambda campaign_id, policy_version: bundle,
     )
     monkeypatch.setattr(
         run_flow,
@@ -167,9 +208,16 @@ def test_run_flow_uses_audited_lifecycle_service_path(monkeypatch, tmp_path):
         run_flow, "validate_raw_contract", lambda raw_path: {"status": "passed"}
     )
     monkeypatch.setattr(
-        run_flow,
-        "build_feature_mart_snapshot",
-        lambda raw_path, output_path, source_mode, run_id: feature_mart_path,
+        run_flow.integrations,
+        "build_feature_mart_for_profile",
+        lambda profile_id, raw_path, output_path, run_id: (
+            feature_mart_path,
+            {
+                "profile_id": profile_id,
+                "source_id": "snapshot_jsonl",
+                "export_id": "local_jsonl",
+            },
+        ),
     )
     monkeypatch.setattr(
         run_flow,
@@ -189,6 +237,7 @@ def test_run_flow_uses_audited_lifecycle_service_path(monkeypatch, tmp_path):
     monkeypatch.setattr(
         run_flow, "read_embeddings_emb_version", lambda path: bundle.emb_version
     )
+
     def _build_generation(
         embeddings_path,
         vector_size,
@@ -207,6 +256,7 @@ def test_run_flow_uses_audited_lifecycle_service_path(monkeypatch, tmp_path):
         "build_generation",
         _build_generation,
     )
+
     def _validate_latest(actor, embeddings_path):
         calls.append("validate_latest")
         assert actor.actor_id == "system:run_flow"
@@ -265,14 +315,21 @@ def test_run_flow_uses_audited_lifecycle_service_path(monkeypatch, tmp_path):
         },
     )
     monkeypatch.setattr(
-        run_flow,
-        "export_approved",
-        lambda policy_result, output_path: output_path,
+        run_flow.integrations,
+        "export_for_profile",
+        lambda **kwargs: {
+            "target_id": "local_jsonl",
+            "export_path": str(tmp_path / "approved_audience.jsonl"),
+            "export_uri": None,
+            "status": "written",
+            "profile_id": kwargs.get("profile_id"),
+            "source_id": "snapshot_jsonl",
+            "export_id": "local_jsonl",
+            "profile_status": "implemented",
+        },
     )
-    monkeypatch.setattr(run_flow, "minio_is_configured", lambda: False)
     monkeypatch.setattr(run_flow, "_write_audit_to_postgres", lambda **kwargs: None)
     monkeypatch.setattr(run_flow, "SUMMARY_PATH", tmp_path / "summary.json")
-    monkeypatch.setattr(run_flow, "EXPORT_PATH", tmp_path / "approved_audience.jsonl")
 
     summary = run_flow.run_minimal_vertical_slice(campaign_id="camp_test")
 
