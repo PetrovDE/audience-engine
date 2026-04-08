@@ -11,6 +11,7 @@ from typing import Any
 from airflow import DAG
 from airflow.operators.python import PythonOperator, get_current_context
 
+from pipelines.minimal_slice import lifecycle_service
 from pipelines.minimal_slice.config import (
     EMBEDDING_MODEL_VERSION,
     FEATURE_MART_PATH,
@@ -28,11 +29,10 @@ from pipelines.minimal_slice.embedding import (
 )
 from pipelines.minimal_slice.exporter import export_approved
 from pipelines.minimal_slice.feature_mart import build_feature_mart_snapshot
+from pipelines.minimal_slice.lifecycle_service import build_system_actor
 from pipelines.minimal_slice.policy_engine import evaluate_policy
 from pipelines.minimal_slice.qdrant_index import (
     build_generation,
-    promote_alias,
-    validate_generation,
 )
 from pipelines.minimal_slice.retrieval import retrieve_similar
 from pipelines.minimal_slice.run_flow import (
@@ -61,6 +61,11 @@ def _require_payload(task_id: str) -> dict[str, Any]:
 
 def _default_args() -> dict[str, Any]:
     return {"owner": "audience-engine", "depends_on_past": False}
+
+
+def _airflow_lifecycle_actor() -> lifecycle_service.LifecycleActor:
+    run_id = str(get_current_context().get("run_id", "manual"))
+    return build_system_actor(f"airflow:{run_id}")
 
 
 def task_prepare_context() -> dict[str, Any]:
@@ -144,12 +149,9 @@ def task_build_generation() -> dict[str, Any]:
 
 def task_validate_generation() -> dict[str, Any]:
     payload = _require_payload("build_generation")
-    build_meta = payload["index_build"]
-    validation = validate_generation(
+    validation = lifecycle_service.validate_latest(
+        actor=_airflow_lifecycle_actor(),
         embeddings_path=Path(payload["paths"]["embeddings_path"]),
-        collection_name=build_meta["collection"],
-        alias_name=build_meta["alias"],
-        expected_count=build_meta["points_count"],
     )
     payload["index_validation"] = validation
     return payload
@@ -157,10 +159,8 @@ def task_validate_generation() -> dict[str, Any]:
 
 def task_promote_alias() -> dict[str, Any]:
     payload = _require_payload("validate_generation")
-    build_meta = payload["index_build"]
-    payload["index_promote"] = promote_alias(
-        alias_name=build_meta["alias"],
-        collection_name=build_meta["collection"],
+    payload["index_promote"] = lifecycle_service.promote_latest(
+        actor=_airflow_lifecycle_actor(),
     )
     return payload
 

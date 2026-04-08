@@ -149,11 +149,19 @@ def test_campaign_role_cannot_access_admin_policy_decision(monkeypatch):
     assert "Admin/operator role is required" in response.text
 
 
-def test_campaign_role_cannot_execute_admin_lifecycle_operation():
-    response = client.post(
-        "/v1/admin/index/generations/validate-latest",
-        headers=_headers(CAMPAIGN_KEY),
-    )
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("get", "/v1/admin/index/generations/latest"),
+        ("get", "/v1/admin/index/generations"),
+        ("post", "/v1/admin/index/generations/validate-latest"),
+        ("post", "/v1/admin/index/alias/promote-latest"),
+        ("post", "/v1/admin/index/alias/rollback-latest"),
+        ("get", "/v1/admin/index/lifecycle-audit"),
+    ],
+)
+def test_campaign_role_cannot_access_any_admin_lifecycle_endpoint(method, path):
+    response = getattr(client, method)(path, headers=_headers(CAMPAIGN_KEY))
     assert response.status_code == 403
     assert "Admin/operator role is required" in response.text
 
@@ -175,3 +183,95 @@ def test_admin_lifecycle_validate_latest_smoke(monkeypatch):
     )
     assert response.status_code == 200
     assert response.json()["stage"] == "validate_generation"
+
+
+def test_admin_lifecycle_promote_and_rollback_smoke(monkeypatch):
+    monkeypatch.setattr(
+        app_module.lifecycle_service,
+        "promote_latest",
+        lambda actor: {
+            "stage": "promote_alias",
+            "alias": "audience-serving",
+            "collection": "customers_v2",
+            "previous_collection": "customers_v1",
+        },
+    )
+    monkeypatch.setattr(
+        app_module.lifecycle_service,
+        "rollback_latest",
+        lambda actor: {
+            "stage": "rollback_alias",
+            "alias": "audience-serving",
+            "collection": "customers_v1",
+            "rolled_back_from": "customers_v2",
+        },
+    )
+    promote = client.post(
+        "/v1/admin/index/alias/promote-latest",
+        headers=_headers(ADMIN_KEY),
+    )
+    rollback = client.post(
+        "/v1/admin/index/alias/rollback-latest",
+        headers=_headers(ADMIN_KEY),
+    )
+    assert promote.status_code == 200
+    assert promote.json()["stage"] == "promote_alias"
+    assert rollback.status_code == 200
+    assert rollback.json()["stage"] == "rollback_alias"
+
+
+def test_admin_lifecycle_list_endpoints_smoke(monkeypatch):
+    monkeypatch.setattr(
+        app_module.lifecycle_service,
+        "get_generation_status",
+        lambda status=None, alias_name=None: {
+            "alias_name": alias_name or "audience-serving",
+            "collection_name": "customers_v2",
+            "status": status or "promoted",
+        },
+    )
+    monkeypatch.setattr(
+        app_module.lifecycle_service,
+        "list_generations",
+        lambda limit=20, status=None, alias_name=None: [
+            {
+                "alias_name": alias_name or "audience-serving",
+                "collection_name": "customers_v2",
+                "status": status or "promoted",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        app_module.lifecycle_service,
+        "list_lifecycle_audit",
+        lambda limit=20, alias_name=None: [
+            {
+                "id": 1,
+                "action": "promote_alias",
+                "alias_name": alias_name or "audience-serving",
+                "actor_role": "system_internal",
+                "actor_id": "system:test",
+                "outcome": "success",
+                "details": {},
+                "action_ts": "2026-04-08T00:00:00+00:00",
+            }
+        ],
+    )
+    latest = client.get(
+        "/v1/admin/index/generations/latest",
+        headers=_headers(ADMIN_KEY),
+    )
+    generations = client.get(
+        "/v1/admin/index/generations?limit=10",
+        headers=_headers(ADMIN_KEY),
+    )
+    lifecycle_audit = client.get(
+        "/v1/admin/index/lifecycle-audit?limit=10",
+        headers=_headers(ADMIN_KEY),
+    )
+    assert latest.status_code == 200
+    assert latest.json()["collection_name"] == "customers_v2"
+    assert generations.status_code == 200
+    assert generations.json()["count"] == 1
+    assert lifecycle_audit.status_code == 200
+    assert lifecycle_audit.json()["count"] == 1

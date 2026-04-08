@@ -15,6 +15,7 @@ Audience Engine is an open-source bank customer ranking and similarity platform 
 - Required version lineage includes `fs_version`, `emb_version`, `policy_version`, and index alias/generation context.
 - API-key RBAC separates campaign retrieval access from admin lifecycle/audit operations.
 - Runtime data-quality gates validate raw/feature/embedding artifacts in the primary run path.
+- Lifecycle validate/promote/rollback operations converge through one audited control path (`lifecycle_service`) for API and system-triggered execution.
 
 Canonical references:
 - [ARCHITECTURE_V3.md](ARCHITECTURE_V3.md)
@@ -102,6 +103,8 @@ Lifecycle operations now have a protected API surface:
 - `POST /v1/admin/index/alias/promote-latest`
 - `POST /v1/admin/index/alias/rollback-latest`
 - `GET /v1/admin/index/lifecycle-audit`
+
+System-triggered lifecycle operations remain allowed for trusted internal flows, but they use the same lifecycle service and lifecycle audit sink with explicit actor identities (`system:run_flow`, `system:airflow:<run_id>`, `system:makefile`).
 
 Canonical references:
 - [INDEX_LIFECYCLE.md](INDEX_LIFECYCLE.md)

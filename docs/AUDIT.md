@@ -93,6 +93,14 @@ All audit tables block `UPDATE` and `DELETE` via trigger `forbid_audience_audit_
 3. one `audience_run_rejections_summary` row per rejection reason code.
 4. one `policy_decision_audit` row per evaluated customer decision.
 
+Lifecycle actions (`validate_generation`, `promote_alias`, `rollback_alias`) write `index_lifecycle_audit` rows through `pipelines/minimal_slice/lifecycle_service.py` for both admin and system-triggered flows.
+
+Actor identity conventions:
+- Admin API path: hashed API-key principal identity (for example `admin:<fingerprint>`).
+- Minimal runtime path: `system:run_flow`.
+- Airflow path: `system:airflow:<run_id>`.
+- Make/CLI path: `system:makefile`.
+
 ## Quick Verification
 ```sql
 SELECT run_id, campaign_id, run_ts, version_bundle->>'emb_version' AS emb_version

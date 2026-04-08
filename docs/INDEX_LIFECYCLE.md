@@ -53,6 +53,17 @@ RBAC requirements:
   - `AE_ADMIN_API_KEYS`
 - Lifecycle endpoints require `admin_operator` role.
 
+## Unified Lifecycle Control Path
+
+All real lifecycle entry paths now converge through `pipelines/minimal_slice/lifecycle_service.py`:
+
+- Retrieval API admin endpoints (`/v1/admin/index/...`) call lifecycle service with admin actor identity.
+- Minimal slice runtime (`pipelines/minimal_slice/run_flow.py`) calls lifecycle service with actor `system:run_flow`.
+- Airflow DAG (`pipelines/airflow_dags/audience_engine_dags.py`) calls lifecycle service with actor `system:airflow:<run_id>`.
+- Make/CLI lifecycle targets (`make validate-index`, `make promote-index`, `make rollback-index`) call lifecycle service with actor `system:makefile`.
+
+`qdrant_index.py` lifecycle functions remain low-level primitives. They are not the operational control boundary for validate/promote/rollback.
+
 ## Make Targets
 
 1. Build new generation:
@@ -64,16 +75,19 @@ make build-index
 ```bash
 make validate-index
 ```
+This writes a lifecycle audit row with actor `system:makefile`.
 
 3. Promote latest validated generation:
 ```bash
 make promote-index
 ```
+This writes a lifecycle audit row with actor `system:makefile`.
 
 4. Roll back latest promoted alias:
 ```bash
 make rollback-index
 ```
+This writes a lifecycle audit row with actor `system:makefile`.
 
 ## Metadata Storage
 

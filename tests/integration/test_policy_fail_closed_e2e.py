@@ -142,12 +142,39 @@ def test_run_flow_fail_closed_persists_decisions_and_exports_zero(monkeypatch):
             "build_embeddings",
             _write_cpu_embeddings_for_run_flow,
         )
+        def _build_generation(
+            embeddings_path,
+            vector_size,
+            alias_name_override,
+            collection_name_override,
+        ):
+            return {
+                "alias": alias_name_override,
+                "collection": collection_name_override,
+                "points_count": 2,
+            }
+
         monkeypatch.setattr(
             run_flow,
-            "create_or_replace_index",
-            lambda embeddings_path, vector_size, collection_name, alias_name: {
-                "alias": alias_name,
-                "collection": collection_name,
+            "build_generation",
+            _build_generation,
+        )
+        monkeypatch.setattr(
+            run_flow.lifecycle_service,
+            "validate_latest",
+            lambda actor, embeddings_path: {
+                "stage": "validate_generation",
+                "alias": "audience-serving",
+                "collection": "audience-serving-fake",
+            },
+        )
+        monkeypatch.setattr(
+            run_flow.lifecycle_service,
+            "promote_latest",
+            lambda actor: {
+                "stage": "promote_alias",
+                "alias": "audience-serving",
+                "collection": "audience-serving-fake",
             },
         )
         monkeypatch.setattr(

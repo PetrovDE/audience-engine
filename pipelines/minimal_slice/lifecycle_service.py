@@ -21,6 +21,13 @@ class LifecycleActor:
     actor_id: str
 
 
+def build_system_actor(source: str) -> LifecycleActor:
+    token = source.strip().replace(" ", "_")
+    if not token:
+        raise ValueError("System actor source must be a non-empty string")
+    return LifecycleActor(role="system_internal", actor_id=f"system:{token}")
+
+
 def _audit_failure_details(
     exc: Exception, extra: dict[str, Any] | None = None
 ) -> dict[str, Any]:

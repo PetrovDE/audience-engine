@@ -106,6 +106,18 @@ curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" \
   "http://localhost:8000/v1/admin/index/lifecycle-audit?limit=50"
 ```
 
+## Lifecycle Operations via Trusted System Paths
+
+System-triggered lifecycle operations are supported for internal runtime/ops flows, but they must use the same `lifecycle_service` control path and write `index_lifecycle_audit` rows.
+
+Examples:
+- Minimal runtime flow (`python -m pipelines.minimal_slice.run_flow`) uses actor `system:run_flow`.
+- Airflow DAG lifecycle tasks use actor `system:airflow:<run_id>`.
+- Make lifecycle commands use actor `system:makefile`:
+  - `make validate-index`
+  - `make promote-index`
+  - `make rollback-index`
+
 ## Airflow E2E DAG Trigger + Monitor
 
 Real minimal-slice DAG:

@@ -13,6 +13,7 @@ from pipelines.version_bundle import (
     preflight_version_bundle,
 )
 
+from . import lifecycle_service
 from .config import (
     BLACKLIST_PATH,
     COMM_HISTORY_PATH,
@@ -42,12 +43,13 @@ from .data_quality import (
 from .embedding import build_embeddings, read_embeddings_emb_version
 from .exporter import export_approved
 from .feature_mart import build_feature_mart_snapshot
+from .lifecycle_service import build_system_actor
 from .policy_decision_audit import (
     build_policy_decision_audit_rows,
     write_policy_decision_audit_rows,
 )
 from .policy_engine import evaluate_policy
-from .qdrant_index import create_or_replace_index
+from .qdrant_index import build_generation
 from .retrieval import retrieve_similar
 from .storage import minio_is_configured, upload_export_to_minio
 from .synthetic_data import generate_synthetic_data
@@ -317,11 +319,19 @@ def run_minimal_vertical_slice(campaign_id: str | None = None) -> dict:
                 f"bundle.emb_version={bundle.emb_version!r}, "
                 f"runtime.emb_version={runtime_emb_version!r}"
             )
-        index_meta = create_or_replace_index(
+        build_generation(
             embeddings_path=embeddings_path,
             vector_size=vector_size,
-            collection_name=bundle.concrete_qdrant_collection,
-            alias_name=bundle.index_alias,
+            alias_name_override=bundle.index_alias,
+            collection_name_override=bundle.concrete_qdrant_collection,
+        )
+        system_actor = build_system_actor("run_flow")
+        lifecycle_service.validate_latest(
+            actor=system_actor,
+            embeddings_path=embeddings_path,
+        )
+        index_meta = lifecycle_service.promote_latest(
+            actor=system_actor,
         )
 
         query_customer = "cust_00000"
