@@ -1,0 +1,12 @@
+cust_00000
+cust_00001
+cust_00046
+cust_00048
+cust_00064
+cust_00078
+cust_00080
+cust_00098
+cust_00099
+cust_00101
+cust_00104
+cust_00118

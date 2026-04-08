@@ -1,0 +1,100 @@
+{
+  "run_ts": "2026-04-08T14:04:03.534066+00:00",
+  "status": "ok",
+  "versions": {
+    "fs_version": "fs_credit_v1",
+    "emb_version": "fs_credit_v1+prompt_credit_v1+nomic-embed-text",
+    "model_version": "nomic-embed-text",
+    "policy_version": "policy_credit_v1",
+    "index_alias": "audience-serving",
+    "concrete_qdrant_collection": "audience-serving-fs_credit_v1-a927f633",
+    "run_id": "a927f633-d20b-4d6a-8319-56f6190d2901",
+    "campaign_id": "camp_fail_closed_e2e"
+  },
+  "inputs": {
+    "raw_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\synthetic_customers.jsonl",
+    "feature_mart_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\feature_mart_snapshot.jsonl",
+    "embeddings_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\embeddings.jsonl",
+    "blacklist_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\blacklist.txt",
+    "comm_history_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\comm_history.jsonl"
+  },
+  "quality": {
+    "status": "passed",
+    "checks": [
+      {
+        "status": "passed",
+        "dataset": "raw",
+        "path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\synthetic_customers.jsonl",
+        "contract": "D:\\AudienceEngine\\governance\\contracts\\raw.yaml",
+        "record_count": 200,
+        "required_fields_checked": [
+          "customer_id",
+          "event_ts"
+        ],
+        "required_versions_checked": []
+      },
+      {
+        "status": "passed",
+        "dataset": "feature_mart",
+        "path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\feature_mart_snapshot.jsonl",
+        "contract": "D:\\AudienceEngine\\governance\\contracts\\feature_mart.yaml",
+        "record_count": 200,
+        "required_fields_checked": [
+          "customer_id",
+          "fs_version",
+          "customer_age_years",
+          "customer_tenure_months",
+          "credit_score_band",
+          "delinquency_12m_count",
+          "utilization_ratio_avg_3m",
+          "card_spend_total_3m",
+          "digital_engagement_score",
+          "is_employee_flag",
+          "do_not_contact_flag"
+        ],
+        "required_versions_checked": [
+          "fs_version",
+          "policy_version"
+        ]
+      },
+      {
+        "status": "passed",
+        "dataset": "embeddings",
+        "path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\embeddings.jsonl",
+        "record_count": 200,
+        "vector_size": 8,
+        "emb_version": "fs_credit_v1+prompt_credit_v1+nomic-embed-text"
+      }
+    ]
+  },
+  "index": {
+    "alias": "audience-serving",
+    "collection": "audience-serving-fs_credit_v1-a927f633"
+  },
+  "retrieval": {
+    "query_customer_id": "cust_00000",
+    "retrieved_count": 2
+  },
+  "policy": {
+    "status": "failed_closed",
+    "fail_closed": true,
+    "total_candidates": 2,
+    "approved_count": 0,
+    "rejected_count": 2,
+    "reject_reason_counts": {
+      "POLICY_FAIL_CLOSED_REQUIRED_INPUT": 2
+    },
+    "requested_size": 20,
+    "selected_count": 0
+  },
+  "export_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\approved_audience.jsonl",
+  "export_minio_uri": null,
+  "audit": {
+    "postgres": {
+      "run_table": "audience_run",
+      "selected_rows_written": 0,
+      "rejection_summary_rows_written": 1,
+      "policy_decision_rows_written": 2
+    }
+  }
+}
