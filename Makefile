@@ -6,7 +6,7 @@ PROD_COMPOSE := docker compose --env-file $(ENV_FILE) -f infra/docker-compose.ym
 UV ?= uv
 UV_RUN := $(UV) run
 
-.PHONY: env init bootstrap lint format test test-unit test-contracts test-integration test-integration-smoke test-integration-gpu up down restart logs ps config dev-up dev-down prod-up prod-down verify seed build-index validate-index promote-index rollback-index demo minimal-slice retrieval-api bench-small bench-medium
+.PHONY: env init bootstrap lint format test test-unit test-contracts test-integration test-integration-smoke test-integration-gpu up down restart logs ps config dev-up dev-down prod-up prod-down verify verify-health seed build-index validate-index promote-index rollback-index demo minimal-slice retrieval-api bench-small bench-medium
 
 env:
 	@if [ ! -f $(ENV_FILE) ]; then cp infra/.env.example $(ENV_FILE); fi
@@ -69,10 +69,14 @@ ps:
 config:
 	$(DEV_COMPOSE) config
 
-verify:
+verify-health:
 	docker compose --env-file $(ENV_FILE) -f infra/docker-compose.dev.yml ps
 	docker compose --env-file $(ENV_FILE) -f infra/docker-compose.dev.yml exec -T qdrant curl -fsS http://localhost:6333/healthz
 	docker compose --env-file $(ENV_FILE) -f infra/docker-compose.dev.yml exec -T ollama ollama list
+
+verify: env
+	$(DEV_COMPOSE) up -d
+	$(UV_RUN) python scripts/verify_e2e.py
 
 seed:
 	$(UV_RUN) python -c "from pipelines.minimal_slice.synthetic_data import generate_synthetic_data; print(generate_synthetic_data(customer_count=200, seed=7))"
