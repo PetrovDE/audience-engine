@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -112,6 +113,19 @@ def _postgres_conninfo() -> str:
     )
 
 
+def _wait_for_postgres_ready(timeout_seconds: float = 45.0) -> bool:
+    if psycopg is None:
+        return False
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        try:
+            with psycopg.connect(_postgres_conninfo()):
+                return True
+        except Exception:
+            time.sleep(0.5)
+    return False
+
+
 def test_run_flow_fail_closed_persists_decisions_and_exports_zero(monkeypatch):
     if psycopg is None:
         pytest.skip("psycopg is not installed")
@@ -125,6 +139,9 @@ def test_run_flow_fail_closed_persists_decisions_and_exports_zero(monkeypatch):
     if up.returncode != 0:
         pytest.skip(f"docker compose up failed: {up.stderr.strip()}")
     try:
+        if not _wait_for_postgres_ready():
+            pytest.skip("postgres did not become ready in time")
+
         original_generate = run_flow.generate_synthetic_data
 
         def _generate_with_missing_required_input(customer_count: int, seed: int):
@@ -142,6 +159,7 @@ def test_run_flow_fail_closed_persists_decisions_and_exports_zero(monkeypatch):
             "build_embeddings",
             _write_cpu_embeddings_for_run_flow,
         )
+
         def _build_generation(
             embeddings_path,
             vector_size,
@@ -207,7 +225,7 @@ def test_run_flow_fail_closed_persists_decisions_and_exports_zero(monkeypatch):
                 },
             ],
         )
-        monkeypatch.setattr(run_flow, "minio_is_configured", lambda: False)
+        monkeypatch.setattr(run_flow.integrations, "minio_is_configured", lambda: False)
         monkeypatch.setattr(feature_mart, "minio_is_configured", lambda: False)
 
         summary = run_flow.run_minimal_vertical_slice(

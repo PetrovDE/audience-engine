@@ -326,6 +326,51 @@ def _append_run_event(
     control_plane.append_run_event(event)
 
 
+def _append_early_failure_run_event(
+    *,
+    early_context: dict,
+    operation_context: dict,
+    failure_stage: str,
+    error: Exception,
+) -> None:
+    event = {
+        "event_ts": datetime.now(timezone.utc).isoformat(),
+        "trigger_source": "system:run_flow",
+        "status": "failed",
+        "run_ts": datetime.now(timezone.utc).isoformat(),
+        "run_id": None,
+        "campaign_id": early_context.get("campaign_id"),
+        "policy_version": operation_context.get("policy_version")
+        or early_context.get("requested_policy_version"),
+        "emb_version": None,
+        "integration_profile_id": operation_context.get("integration_profile_id")
+        or early_context.get("requested_integration_profile_id"),
+        "source_id": operation_context.get("source_id"),
+        "export_id": operation_context.get("export_id"),
+        "quality_status": "failed",
+        "export_status": None,
+        "export_uri": None,
+        "error": {
+            "code": "RUN_FAILED_PRECHECK",
+            "stage": failure_stage,
+            "detail": str(error),
+            "requested_size": early_context.get("requested_size"),
+            "requested_policy_version": early_context.get("requested_policy_version"),
+            "requested_integration_profile_id": early_context.get(
+                "requested_integration_profile_id"
+            ),
+            "policy_selection_source": operation_context.get("policy_selection_source"),
+            "integration_selection_source": operation_context.get(
+                "integration_selection_source"
+            ),
+        },
+    }
+    try:
+        control_plane.append_run_event(event)
+    except Exception as event_exc:  # pragma: no cover - best-effort logging path
+        logger.error("Failed to append early failure run event: %s", event_exc)
+
+
 def run_minimal_vertical_slice(
     campaign_id: str | None = None,
     *,
@@ -333,25 +378,36 @@ def run_minimal_vertical_slice(
     integration_profile_id: str | None = None,
     requested_size: int = 20,
 ) -> dict:
-    run_config = control_plane.resolve_run_configuration(
-        policy_version=policy_version,
-        integration_profile_id=integration_profile_id,
-    )
-    bundle = _build_and_validate_bundle(
-        campaign_id=campaign_id or str(uuid4()),
-        policy_version=run_config.policy_version,
-    )
-    operation_context = {
-        "policy_version": run_config.policy_version,
-        "policy_selection_source": run_config.policy_selection_source,
-        "integration_profile_id": run_config.integration_profile_id,
-        "integration_selection_source": run_config.integration_selection_source,
-        "source_id": run_config.source_id,
-        "export_id": run_config.export_id,
+    early_context = {
+        "campaign_id": campaign_id,
+        "requested_policy_version": policy_version,
+        "requested_integration_profile_id": integration_profile_id,
         "requested_size": requested_size,
     }
+    operation_context: dict = {}
+    bundle: VersionBundle | None = None
+    failure_stage = "resolve_run_configuration"
     quality_checks: list[dict] = []
     try:
+        run_config = control_plane.resolve_run_configuration(
+            policy_version=policy_version,
+            integration_profile_id=integration_profile_id,
+        )
+        operation_context = {
+            "policy_version": run_config.policy_version,
+            "policy_selection_source": run_config.policy_selection_source,
+            "integration_profile_id": run_config.integration_profile_id,
+            "integration_selection_source": run_config.integration_selection_source,
+            "source_id": run_config.source_id,
+            "export_id": run_config.export_id,
+            "requested_size": requested_size,
+        }
+        failure_stage = "build_version_bundle_preflight"
+        bundle = _build_and_validate_bundle(
+            campaign_id=campaign_id or str(uuid4()),
+            policy_version=run_config.policy_version,
+        )
+        failure_stage = "run_pipeline"
         generated = generate_synthetic_data(customer_count=200, seed=7)
         quality_checks.append(validate_raw_contract(generated["raw"]))
 
@@ -496,6 +552,14 @@ def run_minimal_vertical_slice(
         )
         return summary
     except DataQualityError as exc:
+        if bundle is None:
+            _append_early_failure_run_event(
+                early_context=early_context,
+                operation_context=operation_context,
+                failure_stage=failure_stage,
+                error=exc,
+            )
+            raise
         run_ts = datetime.now(timezone.utc).isoformat()
         logger.error("Data quality gate failed: %s", exc)
         failure_summary = _write_failure_summary(
@@ -512,6 +576,14 @@ def run_minimal_vertical_slice(
         )
         raise
     except Exception as exc:
+        if bundle is None:
+            _append_early_failure_run_event(
+                early_context=early_context,
+                operation_context=operation_context,
+                failure_stage=failure_stage,
+                error=exc,
+            )
+            raise
         run_ts = datetime.now(timezone.utc).isoformat()
         logger.error("Run failed: %s", exc)
         failure_summary = {

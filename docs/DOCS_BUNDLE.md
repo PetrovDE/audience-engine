@@ -119,6 +119,7 @@ Operator control-plane APIs:
 - `POST /v1/admin/runs/trigger`
 - `GET /v1/admin/runs/recent`
 - `GET /v1/admin/runs/latest-summary`
+- Orchestration note: API trigger and Airflow DAG are distinct orchestrators over the same governed runtime modules (they are not a single shared orchestrator function).
 
 System-triggered lifecycle operations remain allowed for trusted internal flows, but they use the same lifecycle service and lifecycle audit sink with explicit actor identities (`system:run_flow`, `system:airflow:<run_id>`, `system:makefile`).
 

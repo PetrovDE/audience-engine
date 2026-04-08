@@ -206,6 +206,27 @@ def test_control_plane_defaults_get_update_smoke(monkeypatch):
     )
 
 
+def test_control_plane_defaults_rejects_planned_profile(monkeypatch):
+    def _raise(*, default_policy_version=None, default_integration_profile_id=None):
+        raise ValueError(
+            "Default integration profile is not implemented: "
+            "salesforce_future_profile (status=planned)"
+        )
+
+    monkeypatch.setattr(
+        app_module.control_plane,
+        "save_operator_defaults",
+        _raise,
+    )
+    response = client.put(
+        "/v1/admin/control-plane/defaults",
+        json={"default_integration_profile_id": "salesforce_future_profile"},
+        headers=_headers(ADMIN_KEY),
+    )
+    assert response.status_code == 400
+    assert "Default integration profile is not implemented" in response.text
+
+
 def test_control_plane_integrations_policies_and_runs_smoke(monkeypatch):
     monkeypatch.setattr(
         app_module.control_plane,

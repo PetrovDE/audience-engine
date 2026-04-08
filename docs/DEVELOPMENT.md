@@ -140,3 +140,4 @@ Airflow end-to-end DAG (real minimal-slice chain):
 - Primary operator-facing DAG id: `audience_engine_operator_main`
 - Legacy internal compatibility DAG id: `audience_engine_minimal_slice_e2e` (manual/internal)
 - Defined in: `pipelines/airflow_dags/audience_engine_dags.py`
+- API trigger (`POST /v1/admin/runs/trigger`) and Airflow DAG are separate orchestrators that share the same governed runtime modules.

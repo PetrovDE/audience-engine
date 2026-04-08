@@ -8,7 +8,8 @@ It clarifies the single operator workflow, the integration setup model, and runt
 
 ### Primary operator-facing pipeline entrypoint
 - Airflow DAG: `audience_engine_operator_main`
-- Alternative bootstrap API trigger (same runtime path): `POST /v1/admin/runs/trigger`
+- Alternative bootstrap API trigger: `POST /v1/admin/runs/trigger`
+- Orchestration note: API trigger and Airflow DAG are separate orchestrators that use the same governed runtime modules (`control_plane`, `integrations`, `lifecycle_service`, policy/runtime contracts).
 
 ### Operator-facing DAGs
 - `audience_engine_operator_main`

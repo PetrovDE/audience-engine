@@ -62,6 +62,24 @@ def test_resolve_run_configuration_rejects_planned_profile(monkeypatch, tmp_path
         )
 
 
+def test_load_operator_defaults_falls_back_from_planned_profile(monkeypatch, tmp_path):
+    state_path = tmp_path / "operator_state.json"
+    monkeypatch.setattr(control_plane, "OPERATOR_STATE_PATH", state_path)
+    state_path.write_text(
+        json.dumps(
+            {
+                "default_policy_version": "policy_credit_v1",
+                "default_integration_profile_id": "salesforce_future_profile",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    defaults = control_plane.load_operator_defaults()
+    assert defaults.default_policy_version == "policy_credit_v1"
+    assert defaults.default_integration_profile_id == "local_snapshot_local_export"
+
+
 def test_save_operator_defaults_rejects_unknown_policy(monkeypatch, tmp_path):
     monkeypatch.setattr(
         control_plane, "OPERATOR_STATE_PATH", tmp_path / "operator_state.json"
@@ -69,6 +87,27 @@ def test_save_operator_defaults_rejects_unknown_policy(monkeypatch, tmp_path):
 
     with pytest.raises(ValueError, match="Unknown policy_version"):
         control_plane.save_operator_defaults(default_policy_version="policy_missing_v1")
+
+
+def test_save_operator_defaults_rejects_planned_profile(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        control_plane, "OPERATOR_STATE_PATH", tmp_path / "operator_state.json"
+    )
+
+    with pytest.raises(
+        ValueError, match="Default integration profile is not implemented"
+    ):
+        control_plane.save_operator_defaults(
+            default_integration_profile_id="salesforce_future_profile"
+        )
+
+
+def test_operational_model_declares_distinct_orchestrators():
+    model = control_plane.describe_operational_model()
+    orchestration = model["orchestration_model"]
+    assert "separate orchestrators" in orchestration["summary"]
+    assert "run_minimal_vertical_slice" in orchestration["api_orchestrator"]
+    assert "audience_engine_dags" in orchestration["airflow_orchestrator"]
 
 
 def test_run_event_log_roundtrip(monkeypatch, tmp_path):

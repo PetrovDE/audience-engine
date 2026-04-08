@@ -98,6 +98,19 @@ def get_integration_profile(profile_id: str) -> dict[str, Any]:
     raise ValueError(f"Unknown integration profile: {profile_id}")
 
 
+def _ensure_selectable_integration_profile(
+    profile_id: str, *, require_implemented: bool, selection_kind: str
+) -> dict[str, Any]:
+    profile = get_integration_profile(profile_id)
+    status = str(profile.get("implementation_status", "unknown"))
+    if require_implemented and status != "implemented":
+        raise ValueError(
+            f"{selection_kind} integration profile is not implemented: "
+            f"{profile_id} (status={status})"
+        )
+    return profile
+
+
 def _active_policy_versions() -> list[str]:
     active: list[str] = []
     for policy in _policy_registry().get("policies", []):
@@ -186,7 +199,11 @@ def load_operator_defaults() -> OperatorDefaults:
         candidate_policy = fallback.default_policy_version
 
     try:
-        get_integration_profile(candidate_profile)
+        _ensure_selectable_integration_profile(
+            candidate_profile,
+            require_implemented=True,
+            selection_kind="Default",
+        )
     except ValueError:
         candidate_profile = fallback.default_integration_profile_id
 
@@ -214,7 +231,11 @@ def save_operator_defaults(
     )
 
     _ensure_known_policy(resolved_policy)
-    get_integration_profile(resolved_profile)
+    _ensure_selectable_integration_profile(
+        resolved_profile,
+        require_implemented=True,
+        selection_kind="Default",
+    )
 
     payload = {
         "default_policy_version": resolved_policy,
@@ -252,11 +273,11 @@ def resolve_run_configuration(
         "request" if integration_profile_id else "operator_default"
     )
 
-    profile = get_integration_profile(resolved_profile_id)
-    if profile.get("implementation_status") != "implemented":
-        raise ValueError(
-            f"Selected integration profile is not implemented: {resolved_profile_id}"
-        )
+    profile = _ensure_selectable_integration_profile(
+        resolved_profile_id,
+        require_implemented=True,
+        selection_kind="Selected",
+    )
 
     source_id = str(profile.get("source_id", "")).strip()
     export_id = str(profile.get("export_id", "")).strip()
@@ -294,6 +315,31 @@ def describe_operational_model() -> dict[str, Any]:
                 "integration_profile_id",
                 "requested_size",
             ],
+        },
+        "orchestration_model": {
+            "summary": (
+                "API trigger and Airflow DAG are separate orchestrators over the "
+                "same runtime modules and governance contracts."
+            ),
+            "api_orchestrator": (
+                "services.retrieval_api.app -> "
+                "pipelines.minimal_slice.run_flow.run_minimal_vertical_slice"
+            ),
+            "airflow_orchestrator": (
+                "pipelines.airflow_dags.audience_engine_dags task chain"
+            ),
+            "shared_runtime_modules": [
+                "pipelines.minimal_slice.control_plane",
+                "pipelines.minimal_slice.integrations",
+                "pipelines.minimal_slice.lifecycle_service",
+                "pipelines.minimal_slice.policy_engine",
+            ],
+        },
+        "defaults_validation": {
+            "default_policy_version": "must exist in policy registry",
+            "default_integration_profile_id": (
+                "must reference an implemented integration profile"
+            ),
         },
         "operator_facing_dags": [OPERATOR_MAIN_DAG_ID],
         "internal_dags": [LEGACY_INTERNAL_DAG_ID],

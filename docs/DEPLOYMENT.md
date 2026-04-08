@@ -141,6 +141,9 @@ Primary operator DAG:
 Legacy internal compatibility DAG:
 - `audience_engine_minimal_slice_e2e` (internal/manual compatibility path)
 
+Operational orchestration note:
+- API trigger (`POST /v1/admin/runs/trigger`) and Airflow DAG execution are separate orchestrators over shared governed runtime modules.
+
 ## 7) Build and Validation Commands
 
 Build custom Airflow image for dev stack:

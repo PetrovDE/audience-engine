@@ -30,6 +30,7 @@ Use this sequence for operational usage.
      -d '{"campaign_id":"camp_ops_001","policy_version":"policy_credit_v1","integration_profile_id":"local_snapshot_local_export","requested_size":20}' \
      http://localhost:8000/v1/admin/runs/trigger
    ```
+   API-triggered runs and Airflow-triggered runs are separate orchestrators over the same governed runtime modules.
 5. Monitor run and export status:
    ```bash
    curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" http://localhost:8000/v1/admin/runs/latest-summary

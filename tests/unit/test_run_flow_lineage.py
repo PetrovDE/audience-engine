@@ -335,3 +335,77 @@ def test_run_flow_uses_audited_lifecycle_service_path(monkeypatch, tmp_path):
 
     assert calls == ["build_generation", "validate_latest", "promote_latest"]
     assert summary["index"]["stage"] == "promote_alias"
+
+
+def test_run_flow_logs_event_on_configuration_resolution_failure(monkeypatch):
+    events: list[dict] = []
+
+    def _raise_config_failure(policy_version, integration_profile_id):
+        raise ValueError(
+            "Selected integration profile is not implemented: "
+            "salesforce_future_profile (status=planned)"
+        )
+
+    monkeypatch.setattr(
+        run_flow.control_plane,
+        "resolve_run_configuration",
+        _raise_config_failure,
+    )
+    monkeypatch.setattr(
+        run_flow.control_plane,
+        "append_run_event",
+        lambda event: events.append(event),
+    )
+
+    with pytest.raises(ValueError, match="not implemented"):
+        run_flow.run_minimal_vertical_slice(
+            campaign_id="camp_config_fail",
+            policy_version="policy_credit_v1",
+            integration_profile_id="salesforce_future_profile",
+            requested_size=30,
+        )
+
+    assert len(events) == 1
+    event = events[0]
+    assert event["status"] == "failed"
+    assert event["error"]["code"] == "RUN_FAILED_PRECHECK"
+    assert event["error"]["stage"] == "resolve_run_configuration"
+    assert event["campaign_id"] == "camp_config_fail"
+    assert event["policy_version"] == "policy_credit_v1"
+    assert event["integration_profile_id"] == "salesforce_future_profile"
+
+
+def test_run_flow_logs_event_on_bundle_preflight_failure(monkeypatch):
+    events: list[dict] = []
+
+    monkeypatch.setattr(
+        run_flow.control_plane,
+        "resolve_run_configuration",
+        lambda policy_version, integration_profile_id: _run_config(),
+    )
+
+    def _raise_bundle_failure(campaign_id, policy_version):
+        raise ValueError("policy_version not found in policy registry")
+
+    monkeypatch.setattr(
+        run_flow,
+        "_build_and_validate_bundle",
+        _raise_bundle_failure,
+    )
+    monkeypatch.setattr(
+        run_flow.control_plane,
+        "append_run_event",
+        lambda event: events.append(event),
+    )
+
+    with pytest.raises(ValueError, match="policy_version not found"):
+        run_flow.run_minimal_vertical_slice(campaign_id="camp_bundle_fail")
+
+    assert len(events) == 1
+    event = events[0]
+    assert event["status"] == "failed"
+    assert event["error"]["code"] == "RUN_FAILED_PRECHECK"
+    assert event["error"]["stage"] == "build_version_bundle_preflight"
+    assert event["campaign_id"] == "camp_bundle_fail"
+    assert event["policy_version"] == "policy_credit_v1"
+    assert event["integration_profile_id"] == "local_snapshot_local_export"
