@@ -42,6 +42,7 @@ Prereqs:
 - `uv`
 - Docker + Docker Compose
 - External Ollama runtime (default endpoint for host-run commands: `http://localhost:11434`)
+- Local bootstrap env: `infra/.env.local` (Airflow local login: `admin / 203217`, dev-only)
 
 From repo root:
 
@@ -55,6 +56,7 @@ make demo
 
 What this does:
 - `make up`: starts local dev infrastructure
+- `make up` / `make dev-up*`: use `infra/.env.local` by default
 - `make bootstrap`: creates `.venv` and installs runtime/dev deps
 - `make seed`: generates synthetic customers
 - `make build-index`: builds feature mart + embeddings + Qdrant generation

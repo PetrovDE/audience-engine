@@ -2,156 +2,155 @@
 
 This repository provides two Compose stacks:
 
-- `infra/docker-compose.dev.yml`: local development on Docker Desktop (Windows/Linux/macOS).
-- `infra/docker-compose.yml`: single-node, prod-shaped on-prem deployment.
+- `infra/docker-compose.dev.yml` for local development on Docker Desktop.
+- `infra/docker-compose.yml` for single-node, prod-shaped deployment.
 
-Both stacks use pinned image versions and **do not run Ollama in Compose**.
+Both stacks keep Ollama external (`OLLAMA_BASE_URL`) and now use the same custom Airflow image build.
 
-## 1) Prerequisites
+## 1) Why `_PIP_ADDITIONAL_REQUIREMENTS` Was Removed
 
-- Docker Engine + Docker Compose v2.
-- For pipeline/retrieval paths that generate embeddings, an external Ollama runtime must be running.
-- NVIDIA GPU support is still required for embedding workloads; GPU is expected where Ollama runs.
+Airflow runtime pip mutation was removed to keep startup deterministic and production-honest.
 
-## 2) Environment Contract
+- No startup-time package installation.
+- No hidden dependency drift across restarts.
+- Airflow Python dependencies are baked into an image at build time.
 
-1. Copy the template:
+## 2) Custom Airflow Image
 
-```bash
-cp infra/.env.example infra/.env
-```
+Source of truth:
 
-2. Set secrets before shared/server usage:
+- Dockerfile: `infra/airflow/Dockerfile`
+- Pinned requirements: `infra/airflow/requirements-airflow.txt`
 
-- `POSTGRES_PASSWORD`
-- `MINIO_ROOT_PASSWORD`
-- `MINIO_SECRET_KEY`
-- `AIRFLOW_FERNET_KEY`
-- `AIRFLOW_API_AUTH_JWT_SECRET`
-- `AIRFLOW_ADMIN_PASSWORD`
-- `GRAFANA_ADMIN_PASSWORD`
+Base image:
 
-3. Configure external Ollama endpoint:
+- `apache/airflow:3.1.8-python3.11`
 
-- Containerized components default to `OLLAMA_BASE_URL=http://host.docker.internal:11434`.
-- Host-run commands can use `OLLAMA_BASE_URL=http://localhost:11434`.
-- `AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS` is pinned in `.env.example` so Airflow containers can import and run repository DAG code.
+Both compose files use the same build strategy:
 
-## 3) Development Stack (Docker Desktop)
+- image tag: `audience-engine-airflow:3.1.8-python3.11`
+- build context: `infra/`
+- dockerfile path: `infra/airflow/Dockerfile`
 
-### Service profiles
+To change Airflow-side Python dependencies, edit `infra/airflow/requirements-airflow.txt`, then rebuild.
 
-`docker-compose.dev.yml` keeps startup flexible:
+## 3) Environment Files
 
-- Core services (default): Postgres, Redis, MinIO, ClickHouse, Qdrant.
-- Airflow profile: `airflow-init`, `airflow-api-server`, `airflow-scheduler`, `airflow-dag-processor`, `airflow-triggerer`.
-- Observability profile: Prometheus, Grafana.
+### Local bootstrap (tracked)
 
-### Start commands
+- File: `infra/.env.local`
+- Purpose: local/dev convenience only.
+- Bootstrap credentials include:
+  - Airflow: `admin / 203217`
 
-Minimal core stack:
+This is intentionally not production-safe.
+
+### Prod-shaped template (tracked)
+
+- File: `infra/.env.prod.example`
+- Copy to: `infra/.env.prod`
+- Replace every secret placeholder before deployment.
+- Passwords/secrets are separate per service (no shared universal password).
+
+### Reference template
+
+- `infra/.env.example` remains a generic reference template.
+
+## 4) Development Workflow
+
+Start core services:
 
 ```bash
 make dev-up
 ```
 
-Core + Airflow:
+Start core + Airflow:
 
 ```bash
 make dev-up-airflow
 ```
 
-Core + observability:
+Start core + observability:
 
 ```bash
 make dev-up-observability
 ```
 
-Full local stack:
+Start full local stack:
 
 ```bash
 make dev-up-full
 ```
 
-Stop everything:
+Stop local stack:
 
 ```bash
 make dev-down
 ```
 
-### Useful local endpoints
+Local make targets now default to `infra/.env.local`.
 
-- Postgres: `localhost:${POSTGRES_PORT}`
-- Redis: `localhost:${REDIS_PORT}`
-- MinIO API: `localhost:${MINIO_API_PORT}`
-- MinIO Console: `localhost:${MINIO_CONSOLE_PORT}`
-- ClickHouse HTTP: `localhost:${CLICKHOUSE_PORT}`
-- Qdrant HTTP: `localhost:${QDRANT_PORT}`
-- Airflow API/UI: `localhost:${AIRFLOW_PORT}` (when Airflow profile is enabled)
-- Prometheus: `localhost:${PROMETHEUS_PORT}` (observability profile)
-- Grafana: `localhost:${GRAFANA_PORT}` (observability profile)
+## 5) Prod-Shaped Workflow
 
-## 4) Airflow 3.1.8 Topology
+1. Create runtime env file:
 
-Airflow is modeled with Airflow 3 service boundaries (no Airflow 2 webserver+scheduler shell hack):
+```bash
+cp infra/.env.prod.example infra/.env.prod
+```
 
-- `airflow-init` (one-shot bootstrap): `airflow db migrate` + admin user creation.
-- `airflow-api-server`: `airflow api-server`.
-- `airflow-scheduler`: `airflow scheduler`.
-- `airflow-dag-processor`: `airflow dag-processor`.
-- `airflow-triggerer`: `airflow triggerer`.
+2. Replace all placeholder secrets in `infra/.env.prod`.
 
-Airflow uses Postgres metadata storage and LocalExecutor for this single-node setup.
-For hardened server deployments, bake these Python dependencies into a custom Airflow image instead of runtime pip installation.
-
-## 5) Prod-Shaped Single-Node Deployment
-
-Bring up:
+3. Start stack:
 
 ```bash
 make prod-up
 ```
 
-Stop:
+4. Stop stack:
 
 ```bash
 make prod-down
 ```
 
-Characteristics of `infra/docker-compose.yml`:
+Prod make targets read `infra/.env.prod`.
 
-- Exact pinned versions for all services.
-- `restart: always` defaults.
-- One-shot bootstrap separated (`airflow-init`) from steady-state services.
-- Persistent named volumes for all stateful components.
-- Ports bound to `127.0.0.1` for safer single-node defaults.
-- External Ollama endpoint required (`OLLAMA_BASE_URL`), no bundled Ollama container.
+## 6) Airflow 3 Topology (Retained)
 
-For remote/operator access, place a reverse proxy or SSH tunnel in front of localhost-bound ports.
+The Airflow 3 split is unchanged:
 
-## 6) External Ollama Usage
+- `airflow-init`
+- `airflow-api-server`
+- `airflow-scheduler`
+- `airflow-dag-processor`
+- `airflow-triggerer`
 
-Example checks:
+## 7) Build and Validation Commands
 
-From host:
-
-```bash
-curl -fsS http://localhost:11434/api/tags
-```
-
-From containers (for example Airflow):
+Build custom Airflow image for dev stack:
 
 ```bash
-curl -fsS http://host.docker.internal:11434/api/tags
+docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml build airflow-api-server
 ```
 
-If your Ollama host differs, set `OLLAMA_BASE_URL` accordingly in `infra/.env`.
+Build custom Airflow image for prod-shaped stack:
 
-## 7) Migration Notes (from old Compose layout)
+```bash
+docker compose --env-file infra/.env.prod -f infra/docker-compose.yml build airflow-api-server
+```
 
-- Removed `ollama` service from both compose files.
-- Removed `ollamadata` volume.
-- Airflow upgraded from `2.10.5` single-container pattern to Airflow `3.1.8` multi-service architecture.
-- Replaced legacy Airflow 2 API auth env with Airflow 3 API auth/JWT settings.
-- Dev stack now supports partial startup via profiles (`airflow`, `observability`).
-- Prod-shaped stack now uses loopback-only published ports and explicit single-node hardening defaults.
+Compose config validation:
+
+```bash
+docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml config
+docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml --profile airflow --profile observability config
+docker compose --env-file infra/.env.prod -f infra/docker-compose.yml config
+```
+
+## 8) External Ollama
+
+Ollama remains outside compose.
+
+- Container-side default: `http://host.docker.internal:11434` (local Docker Desktop)
+- Host-side default for local scripts: `http://localhost:11434`
+
+Adjust `OLLAMA_BASE_URL` in env files if your Ollama host differs.

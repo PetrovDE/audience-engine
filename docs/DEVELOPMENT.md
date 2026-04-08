@@ -19,6 +19,11 @@ This will:
   - `runtime-minimal-slice`
 - install dev tools (`pytest`, `ruff`, `mypy`)
 
+## Local Infra Env
+- Local compose uses `infra/.env.local` by default via `Makefile`.
+- Local Airflow bootstrap credentials are `admin / 203217` (dev-only convenience; not production-safe).
+- For host-run embedding/retrieval commands, set `OLLAMA_BASE_URL=http://localhost:11434` if needed.
+
 ## Lint and Format
 ```bash
 make lint
@@ -69,7 +74,7 @@ Workflows are defined under `.github/workflows`:
     - CPU-safe path (`SKIP_GPU_TESTS=1`)
     - synthetic data generation in smoke test flow
     - no repository/application secrets required
-    - dev `.env` defaults are used (`infra/.env.example` -> `infra/.env` if needed)
+    - dev `.env` defaults are read from `infra/.env.local`
 
 ## Run Services in Dev Mode
 Bring local compose stack up/down:
@@ -82,7 +87,12 @@ make dev-up-full
 make dev-down
 ```
 
-`OLLAMA_BASE_URL` is externalized. For Dockerized components, default is `http://host.docker.internal:11434`; for host-run commands, use `http://localhost:11434`.
+Airflow dependencies are now baked into a custom image (`infra/airflow/Dockerfile`) using pinned requirements (`infra/airflow/requirements-airflow.txt`).
+When those dependencies change, rebuild the Airflow image with:
+
+```bash
+docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml build airflow-api-server
+```
 
 Run retrieval API locally:
 

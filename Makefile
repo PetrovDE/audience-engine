@@ -1,23 +1,29 @@
 SHELL := /bin/sh
 
-ENV_FILE ?= infra/.env
-DEV_COMPOSE := docker compose --env-file $(ENV_FILE) -f infra/docker-compose.dev.yml
-PROD_COMPOSE := docker compose --env-file $(ENV_FILE) -f infra/docker-compose.yml
+DEV_ENV_FILE ?= infra/.env.local
+PROD_ENV_FILE ?= infra/.env.prod
+DEV_COMPOSE := docker compose --env-file $(DEV_ENV_FILE) -f infra/docker-compose.dev.yml
+PROD_COMPOSE := docker compose --env-file $(PROD_ENV_FILE) -f infra/docker-compose.yml
 DEV_AIRFLOW_PROFILE := --profile airflow
 DEV_OBSERVABILITY_PROFILE := --profile observability
 UV ?= uv
 UV_RUN := $(UV) run
 
-.PHONY: env init bootstrap lint format test test-unit test-contracts test-integration test-integration-smoke test-integration-gpu up down restart logs ps config dev-up dev-up-airflow dev-up-observability dev-up-full dev-down prod-up prod-down verify verify-health seed build-index validate-index promote-index rollback-index demo minimal-slice retrieval-api bench-small bench-medium
+.PHONY: env env-local env-prod init bootstrap lint format test test-unit test-contracts test-integration test-integration-smoke test-integration-gpu up down restart logs ps config dev-up dev-up-airflow dev-up-observability dev-up-full dev-down prod-up prod-down verify verify-health seed build-index validate-index promote-index rollback-index demo minimal-slice retrieval-api bench-small bench-medium
 
-env:
-	@if [ ! -f $(ENV_FILE) ]; then cp infra/.env.example $(ENV_FILE); fi
+env: env-local
+
+env-local:
+	@if [ ! -f $(DEV_ENV_FILE) ]; then echo "Missing $(DEV_ENV_FILE). Use infra/.env.local as the local bootstrap template."; exit 1; fi
+
+env-prod:
+	@if [ ! -f $(PROD_ENV_FILE) ]; then cp infra/.env.prod.example $(PROD_ENV_FILE); fi
 
 bootstrap:
 	$(UV) venv .venv --python 3.11
 	$(UV) sync --group runtime-retrieval-api --group runtime-minimal-slice --group dev --locked
 
-init: env
+init: env-local
 	$(DEV_COMPOSE) pull
 
 lint:
@@ -44,22 +50,22 @@ test-integration-smoke:
 test-integration-gpu:
 	SKIP_GPU_TESTS=0 $(UV_RUN) pytest -q tests/integration/test_minimal_slice_smoke.py -k gpu
 
-dev-up: env
+dev-up: env-local
 	$(DEV_COMPOSE) up -d
 
-dev-up-airflow: env
+dev-up-airflow: env-local
 	$(DEV_COMPOSE) $(DEV_AIRFLOW_PROFILE) up -d
 
-dev-up-observability: env
+dev-up-observability: env-local
 	$(DEV_COMPOSE) $(DEV_OBSERVABILITY_PROFILE) up -d
 
-dev-up-full: env
+dev-up-full: env-local
 	$(DEV_COMPOSE) $(DEV_AIRFLOW_PROFILE) $(DEV_OBSERVABILITY_PROFILE) up -d
 
 dev-down:
 	$(DEV_COMPOSE) down
 
-prod-up: env
+prod-up: env-prod
 	$(PROD_COMPOSE) up -d
 
 prod-down:
@@ -81,11 +87,11 @@ config:
 	$(DEV_COMPOSE) config
 
 verify-health:
-	docker compose --env-file $(ENV_FILE) -f infra/docker-compose.dev.yml ps
+	docker compose --env-file $(DEV_ENV_FILE) -f infra/docker-compose.dev.yml ps
 	$(UV_RUN) python -c "import urllib.request; urllib.request.urlopen('http://localhost:6333/healthz', timeout=5)"
 	$(UV_RUN) python -c "import os, urllib.request; base=os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434').rstrip('/'); urllib.request.urlopen(f'{base}/api/tags', timeout=5)"
 
-verify: env
+verify: env-local
 	$(DEV_COMPOSE) up -d
 	$(UV_RUN) python scripts/verify_e2e.py
 

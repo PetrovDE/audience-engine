@@ -40,11 +40,13 @@ x-airflow-common-env: &airflow-common-env
   QDRANT_ALIAS: ${QDRANT_ALIAS:-audience-serving}
   OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
   EMBEDDING_MODEL_VERSION: ${EMBEDDING_MODEL_VERSION:-nomic-embed-text}
-  _PIP_ADDITIONAL_REQUIREMENTS: ${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-clickhouse-connect==0.8.18 langchain==0.3.27 langchain-ollama==0.3.8 minio==7.2.18 prometheus-client==0.22.1 psycopg[binary]==3.2.9 pyarrow==21.0.0 pyyaml==6.0.2 qdrant-client==1.15.1 redis==6.4.0}
 
 x-airflow-common: &airflow-common
   <<: *service-defaults
-  image: apache/airflow:3.1.8-python3.11
+  image: audience-engine-airflow:3.1.8-python3.11
+  build:
+    context: .
+    dockerfile: airflow/Dockerfile
   user: "${AIRFLOW_UID:-50000}:0"
   environment:
     <<: *airflow-common-env

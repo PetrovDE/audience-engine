@@ -3,7 +3,7 @@
 ## Prerequisites
 - Docker Engine with Compose v2.
 - Python/`uv` dependencies installed (`make bootstrap`).
-- `infra/.env` exists (`make env`) and has valid credentials for:
+- `infra/.env.local` exists and has valid credentials for:
   - Postgres
   - MinIO
   - Redis
@@ -51,13 +51,13 @@ make dev-down
   - Verify `nvidia-smi` on host.
   - Verify Docker GPU passthrough (`docker run --rm --gpus all nvidia/cuda:12.4.1-runtime-ubuntu22.04 nvidia-smi`).
 - MinIO object assertion fails:
-  - Check `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET` in `infra/.env`.
+  - Check `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET` in `infra/.env.local`.
   - Ensure MinIO service is healthy: `make ps`.
 - ClickHouse step fails:
-  - Confirm ClickHouse credentials/port in `infra/.env`.
+  - Confirm ClickHouse credentials/port in `infra/.env.local`.
   - Ensure `clickhouse` service is healthy: `make ps`.
 - Redis cache assertion fails:
   - Ensure `REDIS_EMBEDDING_CACHE_ENABLED=1`.
   - Ensure `redis` service is healthy and reachable.
 - Postgres audit assertion fails:
-  - Ensure `postgres` service is healthy and credentials in `infra/.env` are correct.
+  - Ensure `postgres` service is healthy and credentials in `infra/.env.local` are correct.

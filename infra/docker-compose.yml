@@ -40,11 +40,13 @@ x-airflow-common-env: &airflow-common-env
   QDRANT_ALIAS: ${QDRANT_ALIAS:-audience-serving}
   OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
   EMBEDDING_MODEL_VERSION: ${EMBEDDING_MODEL_VERSION:-nomic-embed-text}
-  _PIP_ADDITIONAL_REQUIREMENTS: ${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS}
 
 x-airflow-common: &airflow-common
   <<: *service-defaults
-  image: apache/airflow:3.1.8-python3.11
+  image: audience-engine-airflow:3.1.8-python3.11
+  build:
+    context: .
+    dockerfile: airflow/Dockerfile
   user: "${AIRFLOW_UID}:0"
   environment:
     <<: *airflow-common-env

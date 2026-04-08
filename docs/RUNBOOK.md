@@ -12,7 +12,7 @@ Host/bootstrap deployment steps moved to `docs/DEPLOYMENT.md`.
    ```
 2. Ensure Postgres init SQL ran (new volumes only):
    ```bash
-   docker compose -f infra/docker-compose.dev.yml exec postgres \
+   docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml exec postgres \
      psql -U "${POSTGRES_USER:-audience_engine}" -d "${POSTGRES_DB:-audience_engine}" \
      -c "\dt audience_run*"
    ```
@@ -37,7 +37,7 @@ Use these runtime controls when operating the minimal slice with provisioned sto
 Use `pg_dump` to capture durable audit tables.
 
 ```bash
-docker compose -f infra/docker-compose.dev.yml exec postgres \
+docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml exec postgres \
   pg_dump -U "${POSTGRES_USER:-audience_engine}" -d "${POSTGRES_DB:-audience_engine}" \
   --table=audience_run \
   --table=audience_run_selected \
@@ -49,20 +49,20 @@ docker compose -f infra/docker-compose.dev.yml exec postgres \
 
 Copy backup from container:
 ```bash
-docker compose -f infra/docker-compose.dev.yml cp postgres:/tmp/audience_audit.dump ./audience_audit.dump
+docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml cp postgres:/tmp/audience_audit.dump ./audience_audit.dump
 ```
 
 ## Restore
 1. Restore into a target DB:
    ```bash
-   docker compose -f infra/docker-compose.dev.yml cp ./audience_audit.dump postgres:/tmp/audience_audit.dump
-   docker compose -f infra/docker-compose.dev.yml exec postgres \
+   docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml cp ./audience_audit.dump postgres:/tmp/audience_audit.dump
+   docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml exec postgres \
      pg_restore -U "${POSTGRES_USER:-audience_engine}" -d "${POSTGRES_DB:-audience_engine}" \
      --clean --if-exists --no-owner --no-privileges /tmp/audience_audit.dump
    ```
 2. Validate row counts:
    ```bash
-   docker compose -f infra/docker-compose.dev.yml exec postgres \
+   docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml exec postgres \
      psql -U "${POSTGRES_USER:-audience_engine}" -d "${POSTGRES_DB:-audience_engine}" \
      -c "SELECT 'audience_run' AS table, count(*) FROM audience_run
          UNION ALL SELECT 'audience_run_selected', count(*) FROM audience_run_selected
