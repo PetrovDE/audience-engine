@@ -19,6 +19,7 @@ EMBEDDING_SPEC_PATH_V2 = (
 )
 REASON_CODES_PATH = GOVERNANCE_DIR / "dictionaries" / "reason_codes.yaml"
 POLICY_REGISTRY_PATH = GOVERNANCE_DIR / "policies" / "policy_registry.yaml"
+DELIVERY_REGISTRY_PATH = GOVERNANCE_DIR / "delivery" / "delivery_registry.yaml"
 
 
 def _load_yaml(path: Path) -> dict:
@@ -144,3 +145,21 @@ def test_reason_codes_registry_has_versioned_changelog():
 
     codes = {item.get("code") for item in reason_codes.get("codes", [])}
     assert "POLICY_FAIL_CLOSED_REQUIRED_INPUT" in codes
+
+
+def test_delivery_registry_declares_implemented_and_planned_targets():
+    delivery_registry = _load_yaml(DELIVERY_REGISTRY_PATH)
+    targets = delivery_registry.get("delivery_targets", [])
+    assert isinstance(targets, list) and targets, (
+        "delivery_targets registry is required"
+    )
+
+    by_id = {
+        str(item.get("delivery_target_id")): str(item.get("implementation_status"))
+        for item in targets
+        if isinstance(item, dict)
+    }
+    assert by_id.get("crm_csv_file") == "implemented"
+    assert by_id.get("crm_postgres_outbox") == "implemented"
+    assert by_id.get("crm_api_future") == "planned"
+    assert by_id.get("acrm_api_future") == "planned"

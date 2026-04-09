@@ -21,6 +21,7 @@ def _expected_chain() -> list[str]:
         "retrieve_candidates",
         "policy_gate",
         "export_and_audit",
+        "execute_delivery",
     ]
 
 
@@ -122,3 +123,41 @@ def test_airflow_promote_alias_uses_lifecycle_service(monkeypatch):
     assert result["index_promote"]["stage"] == "promote_alias"
     assert captured["actor_id"] == "system:airflow:scheduled_2026_04_08"
     assert captured["role"] == "system_internal"
+
+
+def test_airflow_execute_delivery_task_calls_delivery_runner(monkeypatch, tmp_path):
+    payload = {
+        "versions": {"run_id": "e0f62885-0dbc-4d53-b1d5-59fd0be558e2"},
+        "operations": {"delivery_target_id": "crm_postgres_outbox"},
+        "status": "ok",
+    }
+    captured = {}
+
+    monkeypatch.setattr(dag_module, "_require_payload", lambda task_id: payload)
+    monkeypatch.setattr(
+        dag_module,
+        "get_current_context",
+        lambda: {"run_id": "manual_delivery_1"},
+    )
+    monkeypatch.setattr(dag_module, "SUMMARY_PATH", tmp_path / "summary.json")
+    monkeypatch.setattr(
+        dag_module.delivery_runner,
+        "execute_delivery_for_run",
+        lambda **kwargs: {
+            **kwargs,
+            "delivery_job_id": "6bf66314-d6f5-4fcb-ae0d-f4ff84ff4bd3",
+            "status": "delivered",
+        },
+    )
+    monkeypatch.setattr(
+        dag_module,
+        "_append_airflow_run_event",
+        lambda summary, operation_context: captured.update(
+            {"summary": summary, "operation_context": operation_context}
+        ),
+    )
+
+    result = dag_module.task_execute_delivery()
+    assert result["delivery"]["delivery_target_id"] == "crm_postgres_outbox"
+    assert result["delivery"]["status"] == "delivered"
+    assert captured["operation_context"]["delivery_target_id"] == "crm_postgres_outbox"

@@ -17,6 +17,8 @@ def _run_config() -> control_plane.OperationalRunConfig:
         policy_selection_source="operator_default",
         integration_profile_id="local_snapshot_local_export",
         integration_selection_source="operator_default",
+        delivery_target_id="crm_csv_file",
+        delivery_selection_source="operator_default",
         source_id="snapshot_jsonl",
         export_id="local_jsonl",
     )
@@ -48,7 +50,9 @@ def test_run_flow_fails_when_runtime_embedding_lineage_mismatches_bundle(
     monkeypatch.setattr(
         run_flow.control_plane,
         "resolve_run_configuration",
-        lambda policy_version, integration_profile_id: _run_config(),
+        lambda policy_version,
+        integration_profile_id,
+        delivery_target_id=None: _run_config(),
     )
     monkeypatch.setattr(
         run_flow,
@@ -130,7 +134,9 @@ def test_run_flow_fails_early_on_raw_data_quality_violation(monkeypatch, tmp_pat
     monkeypatch.setattr(
         run_flow.control_plane,
         "resolve_run_configuration",
-        lambda policy_version, integration_profile_id: _run_config(),
+        lambda policy_version,
+        integration_profile_id,
+        delivery_target_id=None: _run_config(),
     )
     monkeypatch.setattr(
         run_flow,
@@ -188,7 +194,9 @@ def test_run_flow_uses_audited_lifecycle_service_path(monkeypatch, tmp_path):
     monkeypatch.setattr(
         run_flow.control_plane,
         "resolve_run_configuration",
-        lambda policy_version, integration_profile_id: _run_config(),
+        lambda policy_version,
+        integration_profile_id,
+        delivery_target_id=None: _run_config(),
     )
     monkeypatch.setattr(
         run_flow,
@@ -328,6 +336,18 @@ def test_run_flow_uses_audited_lifecycle_service_path(monkeypatch, tmp_path):
             "profile_status": "implemented",
         },
     )
+    monkeypatch.setattr(
+        run_flow.delivery_runner,
+        "execute_delivery_for_run",
+        lambda **kwargs: {
+            "delivery_job_id": "6c9d9086-140f-4d2c-88f9-845d4e6ad1ee",
+            "delivery_target_id": "crm_csv_file",
+            "status": "delivered",
+            "rows_delivered": 1,
+            "rows_skipped_conflict": 0,
+            "artifact_uri": str(tmp_path / "crm_delivery_audience.csv"),
+        },
+    )
     monkeypatch.setattr(run_flow, "_write_audit_to_postgres", lambda **kwargs: None)
     monkeypatch.setattr(run_flow, "SUMMARY_PATH", tmp_path / "summary.json")
 
@@ -340,7 +360,9 @@ def test_run_flow_uses_audited_lifecycle_service_path(monkeypatch, tmp_path):
 def test_run_flow_logs_event_on_configuration_resolution_failure(monkeypatch):
     events: list[dict] = []
 
-    def _raise_config_failure(policy_version, integration_profile_id):
+    def _raise_config_failure(
+        policy_version, integration_profile_id, delivery_target_id=None
+    ):
         raise ValueError(
             "Selected integration profile is not implemented: "
             "salesforce_future_profile (status=planned)"
@@ -362,6 +384,7 @@ def test_run_flow_logs_event_on_configuration_resolution_failure(monkeypatch):
             campaign_id="camp_config_fail",
             policy_version="policy_credit_v1",
             integration_profile_id="salesforce_future_profile",
+            delivery_target_id="crm_api_future",
             requested_size=30,
         )
 
@@ -373,6 +396,7 @@ def test_run_flow_logs_event_on_configuration_resolution_failure(monkeypatch):
     assert event["campaign_id"] == "camp_config_fail"
     assert event["policy_version"] == "policy_credit_v1"
     assert event["integration_profile_id"] == "salesforce_future_profile"
+    assert event["delivery_target_id"] == "crm_api_future"
 
 
 def test_run_flow_logs_event_on_bundle_preflight_failure(monkeypatch):
@@ -381,7 +405,9 @@ def test_run_flow_logs_event_on_bundle_preflight_failure(monkeypatch):
     monkeypatch.setattr(
         run_flow.control_plane,
         "resolve_run_configuration",
-        lambda policy_version, integration_profile_id: _run_config(),
+        lambda policy_version,
+        integration_profile_id,
+        delivery_target_id=None: _run_config(),
     )
 
     def _raise_bundle_failure(campaign_id, policy_version):

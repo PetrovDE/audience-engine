@@ -129,9 +129,16 @@ curl -H "X-AE-API-Key: admin_local_key" \
 # runtime_connectivity_checked, runtime_connectivity_valid
 
 curl -X POST -H "X-AE-API-Key: admin_local_key" -H "Content-Type: application/json" \
-  -d '{"campaign_id":"camp_manual","policy_version":"policy_credit_v1","integration_profile_id":"clickhouse_postgres_export","requested_size":20}' \
+  -d '{"campaign_id":"camp_manual","policy_version":"policy_credit_v1","integration_profile_id":"clickhouse_postgres_export","delivery_target_id":"crm_postgres_outbox","requested_size":20}' \
   http://localhost:8000/v1/admin/runs/trigger
-```
+
+curl -H "X-AE-API-Key: admin_local_key" \
+  http://localhost:8000/v1/admin/control-plane/delivery-targets
+
+curl -X POST -H "X-AE-API-Key: admin_local_key" -H "Content-Type: application/json" \
+  -d '{"run_id":"<run_uuid>","delivery_target_id":"crm_postgres_outbox"}' \
+  http://localhost:8000/v1/admin/delivery/trigger
+``` 
 
 Minimal slice demo flow:
 

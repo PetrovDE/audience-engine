@@ -27,6 +27,7 @@ It supports large-scale retrieval and ranking for campaign audience construction
 - Ranking Layer: applies scoring and ranking logic for campaign objectives.
 - Policy Engine Gate: enforces suppressions, eligibility, caps, conflicts, quotas, and reason codes.
 - Audience Export Layer: exports only policy-approved audience members.
+- Delivery/Activation Layer: materializes governed staged audiences into CRM/ACRM handoff contracts.
 - Audit and Governance Layer: records immutable version references and run lineage.
 
 ## Required Version Contracts
@@ -81,6 +82,9 @@ This section records implementation status against V3 constraints so architectur
 - Real integration connectors are runtime-active for:
   - source: `clickhouse_feature_slice` (query executes against ClickHouse)
   - export: `postgres_export_table` (approved audience rows persisted to Postgres staging table)
+- Governed delivery layer is runtime-active from `audience_export_staging` for:
+  - `crm_csv_file` (deterministic CSV handoff artifact)
+  - `crm_postgres_outbox` (idempotent Postgres outbox handoff)
 - API-first operator/admin control-plane endpoints exist in retrieval API (`/v1/admin/control-plane/*`, `/v1/admin/runs/*`).
 - Infra presence exists for Postgres, Redis, MinIO, ClickHouse, Qdrant, Airflow, Prometheus, and Grafana.
 - Airflow includes an explicit operator-facing DAG (`audience_engine_operator_main`) and a legacy internal compatibility DAG (`audience_engine_minimal_slice_e2e`).

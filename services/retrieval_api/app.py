@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from pipelines.minimal_slice import (
     control_plane,
+    delivery_runner,
     integrations,
     lifecycle_service,
     run_flow,
@@ -49,13 +50,20 @@ class RetrieveRequest(BaseModel):
 class OperatorDefaultsUpdateRequest(BaseModel):
     default_policy_version: Optional[str] = None
     default_integration_profile_id: Optional[str] = None
+    default_delivery_target_id: Optional[str] = None
 
 
 class TriggerRunRequest(BaseModel):
     campaign_id: Optional[str] = None
     policy_version: Optional[str] = None
     integration_profile_id: Optional[str] = None
+    delivery_target_id: Optional[str] = None
     requested_size: int = Field(default=20, ge=1, le=500)
+
+
+class TriggerDeliveryRequest(BaseModel):
+    run_id: str
+    delivery_target_id: Optional[str] = None
 
 
 @app.get("/healthz")
@@ -172,6 +180,7 @@ def get_operator_defaults(
     return {
         "default_policy_version": defaults.default_policy_version,
         "default_integration_profile_id": defaults.default_integration_profile_id,
+        "default_delivery_target_id": defaults.default_delivery_target_id,
     }
 
 
@@ -184,23 +193,28 @@ def update_operator_defaults(
     if (
         request.default_policy_version is None
         and request.default_integration_profile_id is None
+        and request.default_delivery_target_id is None
     ):
         raise HTTPException(
             status_code=400,
             detail=(
-                "Provide default_policy_version and/or default_integration_profile_id."
+                "Provide default_policy_version and/or "
+                "default_integration_profile_id and/or "
+                "default_delivery_target_id."
             ),
         )
     try:
         defaults = control_plane.save_operator_defaults(
             default_policy_version=request.default_policy_version,
             default_integration_profile_id=request.default_integration_profile_id,
+            default_delivery_target_id=request.default_delivery_target_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {
         "default_policy_version": defaults.default_policy_version,
         "default_integration_profile_id": defaults.default_integration_profile_id,
+        "default_delivery_target_id": defaults.default_delivery_target_id,
     }
 
 
@@ -230,6 +244,20 @@ def list_control_plane_policies(
     return {
         "default_policy_version": defaults.default_policy_version,
         "policies": policies,
+    }
+
+
+@app.get("/v1/admin/control-plane/delivery-targets")
+def list_control_plane_delivery_targets(
+    include_planned: bool = Query(default=True),
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    targets = delivery_runner.list_delivery_targets(include_planned=include_planned)
+    defaults = control_plane.load_operator_defaults()
+    return {
+        "default_delivery_target_id": defaults.default_delivery_target_id,
+        "targets": targets,
     }
 
 
@@ -268,6 +296,7 @@ def trigger_operator_run(
             campaign_id=request.campaign_id,
             policy_version=request.policy_version,
             integration_profile_id=request.integration_profile_id,
+            delivery_target_id=request.delivery_target_id,
             requested_size=request.requested_size,
         )
     except DataQualityError as exc:
@@ -285,8 +314,122 @@ def trigger_operator_run(
         "integration_profile_id": summary.get("operations", {}).get(
             "integration_profile_id"
         ),
+        "delivery_target_id": summary.get("operations", {}).get("delivery_target_id"),
         "summary": summary,
     }
+
+
+@app.post("/v1/admin/delivery/trigger")
+def trigger_delivery_for_run(
+    request: TriggerDeliveryRequest,
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    try:
+        UUID(request.run_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid run_id format (expected UUID): {request.run_id}",
+        ) from exc
+
+    target_id = request.delivery_target_id
+    if not target_id:
+        target_id = control_plane.load_operator_defaults().default_delivery_target_id
+
+    try:
+        result = delivery_runner.execute_delivery_for_run(
+            run_id=request.run_id,
+            delivery_target_id=target_id,
+            trigger_source="api:/v1/admin/delivery/trigger",
+            requested_by_role=principal.role.value,
+            requested_by_id=principal.actor_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return result
+
+
+@app.get("/v1/admin/delivery/jobs/recent")
+def list_recent_delivery_jobs(
+    limit: int = Query(default=20, ge=1, le=200),
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    try:
+        rows = delivery_runner.list_recent_delivery_jobs(limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"count": len(rows), "jobs": rows}
+
+
+@app.get("/v1/admin/delivery/attempts/recent")
+def list_recent_delivery_attempts(
+    limit: int = Query(default=50, ge=1, le=500),
+    run_id: Optional[str] = Query(default=None),
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    if run_id is not None:
+        try:
+            UUID(run_id)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid run_id format (expected UUID): {run_id}",
+            ) from exc
+    try:
+        rows = delivery_runner.list_recent_delivery_attempts(limit=limit, run_id=run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"count": len(rows), "attempts": rows}
+
+
+@app.get("/v1/admin/delivery/runs/{run_id}/latest-summary")
+def get_latest_delivery_summary_for_run(
+    run_id: str,
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    try:
+        UUID(run_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid run_id format (expected UUID): {run_id}",
+        ) from exc
+    try:
+        summary = delivery_runner.latest_delivery_summary_for_run(run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if summary is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No delivery summary found for run_id={run_id}",
+        )
+    return summary
+
+
+@app.get("/v1/admin/delivery/runs/{run_id}/records")
+def list_delivery_records_for_run(
+    run_id: str,
+    limit: int = Query(default=200, ge=1, le=1000),
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    try:
+        UUID(run_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid run_id format (expected UUID): {run_id}",
+        ) from exc
+    try:
+        rows = delivery_runner.list_delivery_records_for_run(run_id=run_id, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"count": len(rows), "records": rows}
 
 
 @app.get("/v1/admin/index/generations/latest")

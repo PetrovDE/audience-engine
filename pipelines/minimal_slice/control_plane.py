@@ -7,6 +7,7 @@ from typing import Any
 
 import yaml
 
+from . import delivery_registry
 from .config import POLICY_VERSION
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +29,7 @@ LEGACY_INTERNAL_DAG_ID = "audience_engine_minimal_slice_e2e"
 class OperatorDefaults:
     default_policy_version: str
     default_integration_profile_id: str
+    default_delivery_target_id: str
 
 
 @dataclass(frozen=True)
@@ -36,6 +38,8 @@ class OperationalRunConfig:
     policy_selection_source: str
     integration_profile_id: str
     integration_selection_source: str
+    delivery_target_id: str
+    delivery_selection_source: str
     source_id: str
     export_id: str
 
@@ -80,6 +84,10 @@ def list_integration_profiles(*, include_planned: bool = True) -> list[dict[str,
     if include_planned:
         return rows
     return [r for r in rows if r.get("implementation_status") == "implemented"]
+
+
+def list_delivery_targets(*, include_planned: bool = True) -> list[dict[str, Any]]:
+    return delivery_registry.list_delivery_targets(include_planned=include_planned)
 
 
 def _connector_by_id(kind: str, connector_id: str) -> dict[str, Any]:
@@ -170,6 +178,7 @@ def _fallback_defaults() -> OperatorDefaults:
     return OperatorDefaults(
         default_policy_version=_default_policy_version(),
         default_integration_profile_id=_default_profile_id(),
+        default_delivery_target_id=delivery_registry.default_delivery_target_id(),
     )
 
 
@@ -192,6 +201,9 @@ def load_operator_defaults() -> OperatorDefaults:
             "default_integration_profile_id", fallback.default_integration_profile_id
         )
     )
+    candidate_delivery = str(
+        state.get("default_delivery_target_id", fallback.default_delivery_target_id)
+    )
 
     try:
         _ensure_known_policy(candidate_policy)
@@ -207,9 +219,18 @@ def load_operator_defaults() -> OperatorDefaults:
     except ValueError:
         candidate_profile = fallback.default_integration_profile_id
 
+    try:
+        delivery_registry.ensure_selectable_delivery_target(
+            candidate_delivery,
+            selection_kind="Default",
+        )
+    except ValueError:
+        candidate_delivery = fallback.default_delivery_target_id
+
     return OperatorDefaults(
         default_policy_version=candidate_policy,
         default_integration_profile_id=candidate_profile,
+        default_delivery_target_id=candidate_delivery,
     )
 
 
@@ -217,6 +238,7 @@ def save_operator_defaults(
     *,
     default_policy_version: str | None = None,
     default_integration_profile_id: str | None = None,
+    default_delivery_target_id: str | None = None,
 ) -> OperatorDefaults:
     current = load_operator_defaults()
     resolved_policy = (
@@ -229,6 +251,11 @@ def save_operator_defaults(
         if isinstance(default_integration_profile_id, str)
         else current.default_integration_profile_id
     )
+    resolved_delivery_target = (
+        default_delivery_target_id.strip()
+        if isinstance(default_delivery_target_id, str)
+        else current.default_delivery_target_id
+    )
 
     _ensure_known_policy(resolved_policy)
     _ensure_selectable_integration_profile(
@@ -236,10 +263,15 @@ def save_operator_defaults(
         require_implemented=True,
         selection_kind="Default",
     )
+    delivery_registry.ensure_selectable_delivery_target(
+        resolved_delivery_target,
+        selection_kind="Default",
+    )
 
     payload = {
         "default_policy_version": resolved_policy,
         "default_integration_profile_id": resolved_profile,
+        "default_delivery_target_id": resolved_delivery_target,
     }
     OPERATOR_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     with OPERATOR_STATE_PATH.open("w", encoding="utf-8") as f:
@@ -248,6 +280,7 @@ def save_operator_defaults(
     return OperatorDefaults(
         default_policy_version=resolved_policy,
         default_integration_profile_id=resolved_profile,
+        default_delivery_target_id=resolved_delivery_target,
     )
 
 
@@ -255,6 +288,7 @@ def resolve_run_configuration(
     *,
     policy_version: str | None,
     integration_profile_id: str | None,
+    delivery_target_id: str | None = None,
 ) -> OperationalRunConfig:
     defaults = load_operator_defaults()
 
@@ -271,6 +305,16 @@ def resolve_run_configuration(
     )
     integration_selection_source = (
         "request" if integration_profile_id else "operator_default"
+    )
+    resolved_delivery_target_id = (
+        delivery_target_id.strip()
+        if delivery_target_id
+        else defaults.default_delivery_target_id
+    )
+    delivery_selection_source = "request" if delivery_target_id else "operator_default"
+    delivery_registry.ensure_selectable_delivery_target(
+        resolved_delivery_target_id,
+        selection_kind="Selected",
     )
 
     profile = _ensure_selectable_integration_profile(
@@ -299,6 +343,8 @@ def resolve_run_configuration(
         policy_selection_source=policy_selection_source,
         integration_profile_id=resolved_profile_id,
         integration_selection_source=integration_selection_source,
+        delivery_target_id=resolved_delivery_target_id,
+        delivery_selection_source=delivery_selection_source,
         source_id=source_id,
         export_id=export_id,
     )
@@ -313,6 +359,7 @@ def describe_operational_model() -> dict[str, Any]:
                 "campaign_id",
                 "policy_version",
                 "integration_profile_id",
+                "delivery_target_id",
                 "requested_size",
             ],
         },
@@ -340,6 +387,9 @@ def describe_operational_model() -> dict[str, Any]:
             "default_integration_profile_id": (
                 "must reference an implemented integration profile"
             ),
+            "default_delivery_target_id": (
+                "must reference an implemented delivery target"
+            ),
         },
         "operator_facing_dags": [OPERATOR_MAIN_DAG_ID],
         "internal_dags": [LEGACY_INTERNAL_DAG_ID],
@@ -348,10 +398,16 @@ def describe_operational_model() -> dict[str, Any]:
             "/v1/admin/control-plane/model",
             "/v1/admin/control-plane/defaults",
             "/v1/admin/control-plane/integrations",
+            "/v1/admin/control-plane/delivery-targets",
             "/v1/admin/control-plane/policies",
             "/v1/admin/runs/trigger",
             "/v1/admin/runs/recent",
             "/v1/admin/runs/latest-summary",
+            "/v1/admin/delivery/trigger",
+            "/v1/admin/delivery/jobs/recent",
+            "/v1/admin/delivery/attempts/recent",
+            "/v1/admin/delivery/runs/{run_id}/latest-summary",
+            "/v1/admin/delivery/runs/{run_id}/records",
             "/v1/admin/index/*",
             "/v1/policy/decisions/{run_id}/{customer_id}",
         ],

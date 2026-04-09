@@ -99,6 +99,64 @@ Uniqueness: (`run_id`, `customer_id`)
 - `action_ts` (TIMESTAMPTZ)
 - `created_at` (TIMESTAMPTZ, default `now()`)
 
+### `audience_delivery_job`
+- `delivery_job_id` (UUID, PK)
+- `run_id` (UUID, FK -> `audience_run.run_id`)
+- `campaign_id` (TEXT)
+- `delivery_target_id` (TEXT)
+- `trigger_source` (TEXT)
+- `requested_by_role` (TEXT)
+- `requested_by_id` (TEXT)
+- `status` (TEXT, `pending|materialized|delivered|failed|skipped_conflict`)
+- `source_row_count` (INTEGER)
+- `rows_materialized` (INTEGER)
+- `rows_delivered` (INTEGER)
+- `rows_skipped_conflict` (INTEGER)
+- `artifact_uri` (TEXT, nullable)
+- `error_detail` (TEXT, nullable)
+- `started_at`, `materialized_at`, `completed_at`, `created_at` (TIMESTAMPTZ)
+
+### `audience_delivery_attempt`
+- `id` (BIGSERIAL, PK)
+- `delivery_job_id` (UUID, FK -> `audience_delivery_job.delivery_job_id`)
+- `run_id` (UUID, FK -> `audience_run.run_id`)
+- `campaign_id` (TEXT)
+- `delivery_target_id` (TEXT)
+- `attempt_status` (TEXT, `pending|materialized|delivered|failed|skipped_conflict`)
+- `details` (JSONB)
+- `attempt_ts` (TIMESTAMPTZ)
+- `created_at` (TIMESTAMPTZ, default `now()`)
+
+### `audience_delivery_record`
+- `id` (BIGSERIAL, PK)
+- `run_id` (UUID, FK -> `audience_run.run_id`)
+- `campaign_id` (TEXT)
+- `customer_id` (TEXT)
+- `delivery_target_id` (TEXT)
+- `policy_version`, `integration_profile_id`, `source_id`, `export_target_id` (TEXT)
+- `delivery_status` (TEXT, `pending|materialized|delivered|failed|skipped_conflict`)
+- `delivery_job_id` (UUID, FK -> `audience_delivery_job.delivery_job_id`)
+- `delivery_artifact_uri` (TEXT, nullable)
+- `delivery_payload` (JSONB)
+- `staging_exported_ts`, `materialized_ts`, `delivered_ts`, `created_at` (TIMESTAMPTZ)
+
+Uniqueness: (`run_id`, `customer_id`, `delivery_target_id`)
+
+### `audience_crm_postgres_outbox`
+- `id` (BIGSERIAL, PK)
+- `run_id` (UUID, FK -> `audience_run.run_id`)
+- `campaign_id` (TEXT)
+- `customer_id` (TEXT)
+- `delivery_target_id` (TEXT, current implementation: `crm_postgres_outbox`)
+- `delivery_job_id` (UUID, FK -> `audience_delivery_job.delivery_job_id`)
+- `outbox_status` (TEXT, `pending|materialized|delivered|failed|skipped_conflict`)
+- `policy_version`, `integration_profile_id`, `source_id`, `export_target_id` (TEXT)
+- `staging_exported_ts` (TIMESTAMPTZ)
+- `payload` (JSONB)
+- `created_at` (TIMESTAMPTZ)
+
+Uniqueness: (`run_id`, `customer_id`, `delivery_target_id`)
+
 ## Append-Only Enforcement
 All audit tables block `UPDATE` and `DELETE` via trigger `forbid_audience_audit_mutation()`.
 
@@ -111,6 +169,8 @@ All audit tables block `UPDATE` and `DELETE` via trigger `forbid_audience_audit_
 - Migration script: `infra/postgres/migrations/004_index_lifecycle_audit.sql`
 - Init script: `infra/postgres/init/005_export_staging.sql`
 - Migration script: `infra/postgres/migrations/005_export_staging.sql`
+- Init script: `infra/postgres/init/006_delivery_layer.sql`
+- Migration script: `infra/postgres/migrations/006_delivery_layer.sql`
 
 ## Minimal Slice Runtime Behavior
 `pipelines/minimal_slice/run_flow.py` writes:
@@ -119,6 +179,9 @@ All audit tables block `UPDATE` and `DELETE` via trigger `forbid_audience_audit_
 3. one `audience_run_rejections_summary` row per rejection reason code.
 4. one `policy_decision_audit` row per evaluated customer decision.
 5. when the `postgres_export_table` target is selected, one `audience_export_staging` row per approved customer.
+6. delivery execution writes `audience_delivery_job` and `audience_delivery_attempt` rows.
+7. delivery execution writes idempotent `audience_delivery_record` rows.
+8. when delivery target `crm_postgres_outbox` is selected, one idempotent `audience_crm_postgres_outbox` row per delivered customer.
 
 Operational control-plane run history is also appended to:
 - `data/minimal_slice/control_plane/run_events.jsonl`
@@ -164,5 +227,26 @@ LIMIT 20;
 SELECT run_id, campaign_id, customer_id, final_score, rank, policy_version, exported_ts
 FROM audience_export_staging
 ORDER BY exported_ts DESC
+LIMIT 20;
+```
+
+```sql
+SELECT delivery_job_id, run_id, delivery_target_id, status, rows_delivered, rows_skipped_conflict, started_at
+FROM audience_delivery_job
+ORDER BY started_at DESC
+LIMIT 20;
+```
+
+```sql
+SELECT run_id, customer_id, delivery_target_id, delivery_status, delivered_ts
+FROM audience_delivery_record
+ORDER BY created_at DESC
+LIMIT 20;
+```
+
+```sql
+SELECT run_id, customer_id, delivery_target_id, outbox_status, created_at
+FROM audience_crm_postgres_outbox
+ORDER BY created_at DESC
 LIMIT 20;
 ```

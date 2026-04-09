@@ -23,10 +23,16 @@ It clarifies the single operator workflow, the integration setup model, and runt
 - `GET /v1/admin/control-plane/model`
 - `GET|PUT /v1/admin/control-plane/defaults`
 - `GET /v1/admin/control-plane/integrations`
+- `GET /v1/admin/control-plane/delivery-targets`
 - `GET /v1/admin/control-plane/policies`
 - `POST /v1/admin/runs/trigger`
 - `GET /v1/admin/runs/recent`
 - `GET /v1/admin/runs/latest-summary`
+- `POST /v1/admin/delivery/trigger`
+- `GET /v1/admin/delivery/jobs/recent`
+- `GET /v1/admin/delivery/attempts/recent`
+- `GET /v1/admin/delivery/runs/{run_id}/latest-summary`
+- `GET /v1/admin/delivery/runs/{run_id}/records`
 - `GET /v1/admin/index/*` lifecycle endpoints
 - `GET /v1/policy/decisions/{run_id}/{customer_id}`
 
@@ -81,6 +87,36 @@ Runtime abstraction modules:
 
 Only `implemented` profiles/connectors can be selected for runtime execution.
 
+## Delivery Activation Model
+
+Delivery registry file:
+- `governance/delivery/delivery_registry.yaml`
+
+Implemented delivery targets:
+- `crm_csv_file`: deterministic CSV artifact materialization from `audience_export_staging` rows.
+- `crm_postgres_outbox`: machine-consumable Postgres outbox rows from `audience_export_staging`.
+
+Planned-only (not runnable) delivery targets:
+- `crm_api_future`
+- `acrm_api_future`
+
+Selection model:
+1. Operator default delivery target is stored in `data/minimal_slice/control_plane/operator_state.json` as `default_delivery_target_id`.
+2. Run trigger and Airflow `dag_run.conf` may override `delivery_target_id` per run.
+3. Runtime rejects planned/non-implemented delivery targets for execution.
+4. Delivery execution is governed and reads only from `audience_export_staging`.
+
+Delivery status model:
+- `pending`
+- `materialized`
+- `delivered`
+- `failed`
+- `skipped_conflict`
+
+Idempotency model:
+- no duplicate delivery records for `(run_id, customer_id, delivery_target_id)`.
+- retries create new delivery jobs/attempt logs while data rows remain conflict-safe.
+
 ## Policy Selection Model
 
 Policy registry:
@@ -116,6 +152,7 @@ Durable run lineage:
 4. Trigger main run (`/v1/admin/runs/trigger`) or trigger DAG `audience_engine_operator_main` with equivalent conf.
 5. Monitor progress/results via `/v1/admin/runs/latest-summary`, `/v1/admin/runs/recent`, lifecycle APIs, and policy decision lookup.
 6. Validate export status (`export.status`, `export.export_uri`) and audit lineage.
+7. Monitor delivery with `/v1/admin/control-plane/delivery-targets`, `/v1/admin/delivery/jobs/recent`, `/v1/admin/delivery/attempts/recent`, and run-specific delivery summary endpoints.
 
 ## Deferred Items
 - Direct CRM/ACRM/DWH production connectors.

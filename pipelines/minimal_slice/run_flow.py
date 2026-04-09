@@ -13,7 +13,7 @@ from pipelines.version_bundle import (
     preflight_version_bundle,
 )
 
-from . import control_plane, integrations, lifecycle_service
+from . import control_plane, delivery_runner, integrations, lifecycle_service
 from .config import (
     BLACKLIST_PATH,
     COMM_HISTORY_PATH,
@@ -300,6 +300,7 @@ def _append_run_event(
     versions = summary.get("versions") if isinstance(summary, dict) else {}
     quality = summary.get("quality") if isinstance(summary, dict) else {}
     export = summary.get("export") if isinstance(summary, dict) else {}
+    delivery = summary.get("delivery") if isinstance(summary, dict) else {}
     event = {
         "event_ts": datetime.now(timezone.utc).isoformat(),
         "trigger_source": trigger_source,
@@ -318,9 +319,16 @@ def _append_run_event(
         "integration_profile_id": operation_context.get("integration_profile_id"),
         "source_id": operation_context.get("source_id"),
         "export_id": operation_context.get("export_id"),
+        "delivery_target_id": operation_context.get("delivery_target_id"),
         "quality_status": quality.get("status") if isinstance(quality, dict) else None,
         "export_status": export.get("status") if isinstance(export, dict) else None,
         "export_uri": export.get("export_uri") if isinstance(export, dict) else None,
+        "delivery_status": delivery.get("status")
+        if isinstance(delivery, dict)
+        else None,
+        "delivery_job_id": delivery.get("delivery_job_id")
+        if isinstance(delivery, dict)
+        else None,
         "error": quality.get("error") if isinstance(quality, dict) else None,
     }
     control_plane.append_run_event(event)
@@ -345,6 +353,8 @@ def _append_early_failure_run_event(
         "emb_version": None,
         "integration_profile_id": operation_context.get("integration_profile_id")
         or early_context.get("requested_integration_profile_id"),
+        "delivery_target_id": operation_context.get("delivery_target_id")
+        or early_context.get("requested_delivery_target_id"),
         "source_id": operation_context.get("source_id"),
         "export_id": operation_context.get("export_id"),
         "quality_status": "failed",
@@ -359,9 +369,15 @@ def _append_early_failure_run_event(
             "requested_integration_profile_id": early_context.get(
                 "requested_integration_profile_id"
             ),
+            "requested_delivery_target_id": early_context.get(
+                "requested_delivery_target_id"
+            ),
             "policy_selection_source": operation_context.get("policy_selection_source"),
             "integration_selection_source": operation_context.get(
                 "integration_selection_source"
+            ),
+            "delivery_selection_source": operation_context.get(
+                "delivery_selection_source"
             ),
         },
     }
@@ -376,12 +392,14 @@ def run_minimal_vertical_slice(
     *,
     policy_version: str | None = None,
     integration_profile_id: str | None = None,
+    delivery_target_id: str | None = None,
     requested_size: int = 20,
 ) -> dict:
     early_context = {
         "campaign_id": campaign_id,
         "requested_policy_version": policy_version,
         "requested_integration_profile_id": integration_profile_id,
+        "requested_delivery_target_id": delivery_target_id,
         "requested_size": requested_size,
     }
     operation_context: dict = {}
@@ -392,12 +410,15 @@ def run_minimal_vertical_slice(
         run_config = control_plane.resolve_run_configuration(
             policy_version=policy_version,
             integration_profile_id=integration_profile_id,
+            delivery_target_id=delivery_target_id,
         )
         operation_context = {
             "policy_version": run_config.policy_version,
             "policy_selection_source": run_config.policy_selection_source,
             "integration_profile_id": run_config.integration_profile_id,
             "integration_selection_source": run_config.integration_selection_source,
+            "delivery_target_id": run_config.delivery_target_id,
+            "delivery_selection_source": run_config.delivery_selection_source,
             "source_id": run_config.source_id,
             "export_id": run_config.export_id,
             "requested_size": requested_size,
@@ -483,6 +504,27 @@ def run_minimal_vertical_slice(
                 row for row in policy_result["results"] if row.get("selected", False)
             ],
         }
+        pre_export_audit_context = {
+            "status": "pending",
+            "delivery_target_id": run_config.delivery_target_id,
+        }
+        run_row, selected_rows, rejection_rows, decision_rows = _build_audit_rows(
+            retrieved=retrieved,
+            policy_result=policy_result,
+            bundle=bundle,
+            run_ts=run_ts,
+            product_id="minimal_slice",
+            channel="email",
+            resolved_collection=index_meta["collection"],
+            operation_context=operation_context,
+            export_context=pre_export_audit_context,
+        )
+        _write_audit_to_postgres(
+            run_row=run_row,
+            selected_rows=selected_rows,
+            rejection_rows=rejection_rows,
+            decision_rows=decision_rows,
+        )
         export_context = {
             "run_id": bundle.run_id,
             "campaign_id": bundle.campaign_id,
@@ -505,22 +547,12 @@ def run_minimal_vertical_slice(
             output_path=EXPORT_PATH,
             export_context=export_context,
         )
-        run_row, selected_rows, rejection_rows, decision_rows = _build_audit_rows(
-            retrieved=retrieved,
-            policy_result=policy_result,
-            bundle=bundle,
-            run_ts=run_ts,
-            product_id="minimal_slice",
-            channel="email",
-            resolved_collection=index_meta["collection"],
-            operation_context=operation_context,
-            export_context=export_result,
-        )
-        _write_audit_to_postgres(
-            run_row=run_row,
-            selected_rows=selected_rows,
-            rejection_rows=rejection_rows,
-            decision_rows=decision_rows,
+        delivery_result = delivery_runner.execute_delivery_for_run(
+            run_id=bundle.run_id,
+            delivery_target_id=run_config.delivery_target_id,
+            trigger_source="system:run_flow",
+            requested_by_role="system_internal",
+            requested_by_id="system:run_flow",
         )
 
         summary = {
@@ -548,6 +580,7 @@ def run_minimal_vertical_slice(
             "export_path": export_result["export_path"],
             "export_minio_uri": export_result["export_uri"],
             "export": export_result,
+            "delivery": delivery_result,
             "audit": {
                 "postgres": {
                     "run_table": "audience_run",

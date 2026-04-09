@@ -177,16 +177,20 @@ def test_control_plane_defaults_get_update_smoke(monkeypatch):
         lambda: app_module.control_plane.OperatorDefaults(
             default_policy_version="policy_credit_v1",
             default_integration_profile_id="local_snapshot_local_export",
+            default_delivery_target_id="crm_postgres_outbox",
         ),
     )
     monkeypatch.setattr(
         app_module.control_plane,
         "save_operator_defaults",
         lambda default_policy_version=None,
-        default_integration_profile_id=None: app_module.control_plane.OperatorDefaults(
+        default_integration_profile_id=None,
+        default_delivery_target_id=None: app_module.control_plane.OperatorDefaults(
             default_policy_version=default_policy_version or "policy_credit_v1",
             default_integration_profile_id=default_integration_profile_id
             or "local_snapshot_local_export",
+            default_delivery_target_id=default_delivery_target_id
+            or "crm_postgres_outbox",
         ),
     )
     get_resp = client.get(
@@ -195,20 +199,30 @@ def test_control_plane_defaults_get_update_smoke(monkeypatch):
     )
     put_resp = client.put(
         "/v1/admin/control-plane/defaults",
-        json={"default_integration_profile_id": "clickhouse_postgres_export"},
+        json={
+            "default_integration_profile_id": "clickhouse_postgres_export",
+            "default_delivery_target_id": "crm_csv_file",
+        },
         headers=_headers(ADMIN_KEY),
     )
     assert get_resp.status_code == 200
     assert get_resp.json()["default_policy_version"] == "policy_credit_v1"
+    assert get_resp.json()["default_delivery_target_id"] == "crm_postgres_outbox"
     assert put_resp.status_code == 200
     assert (
         put_resp.json()["default_integration_profile_id"]
         == "clickhouse_postgres_export"
     )
+    assert put_resp.json()["default_delivery_target_id"] == "crm_csv_file"
 
 
 def test_control_plane_defaults_rejects_planned_profile(monkeypatch):
-    def _raise(*, default_policy_version=None, default_integration_profile_id=None):
+    def _raise(
+        *,
+        default_policy_version=None,
+        default_integration_profile_id=None,
+        default_delivery_target_id=None,
+    ):
         raise ValueError(
             "Default integration profile is not implemented: "
             "salesforce_future_profile (status=planned)"
@@ -264,6 +278,7 @@ def test_control_plane_integrations_policies_and_runs_smoke(monkeypatch):
         lambda: app_module.control_plane.OperatorDefaults(
             default_policy_version="policy_credit_v1",
             default_integration_profile_id="local_snapshot_local_export",
+            default_delivery_target_id="crm_postgres_outbox",
         ),
     )
     monkeypatch.setattr(
@@ -315,6 +330,7 @@ def test_trigger_operator_run_smoke(monkeypatch):
         lambda campaign_id=None,
         policy_version=None,
         integration_profile_id=None,
+        delivery_target_id=None,
         requested_size=20: {
             "status": "ok",
             "versions": {
@@ -324,7 +340,8 @@ def test_trigger_operator_run_smoke(monkeypatch):
             },
             "operations": {
                 "integration_profile_id": integration_profile_id
-                or "local_snapshot_local_export"
+                or "local_snapshot_local_export",
+                "delivery_target_id": delivery_target_id or "crm_postgres_outbox",
             },
         },
     )
@@ -334,6 +351,7 @@ def test_trigger_operator_run_smoke(monkeypatch):
             "campaign_id": "camp_manual",
             "policy_version": "policy_credit_v1",
             "integration_profile_id": "local_snapshot_local_export",
+            "delivery_target_id": "crm_postgres_outbox",
             "requested_size": 25,
         },
         headers=_headers(ADMIN_KEY),
@@ -343,6 +361,99 @@ def test_trigger_operator_run_smoke(monkeypatch):
     assert body["status"] == "ok"
     assert body["campaign_id"] == "camp_manual"
     assert body["integration_profile_id"] == "local_snapshot_local_export"
+    assert body["delivery_target_id"] == "crm_postgres_outbox"
+
+
+def test_delivery_endpoints_smoke(monkeypatch):
+    monkeypatch.setattr(
+        app_module.control_plane,
+        "load_operator_defaults",
+        lambda: app_module.control_plane.OperatorDefaults(
+            default_policy_version="policy_credit_v1",
+            default_integration_profile_id="local_snapshot_local_export",
+            default_delivery_target_id="crm_postgres_outbox",
+        ),
+    )
+    monkeypatch.setattr(
+        app_module.delivery_runner,
+        "list_delivery_targets",
+        lambda include_planned=True: [
+            {
+                "delivery_target_id": "crm_postgres_outbox",
+                "implementation_status": "implemented",
+                "runtime_runnable": True,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        app_module.delivery_runner,
+        "execute_delivery_for_run",
+        lambda **kwargs: {
+            "delivery_job_id": "d174ba29-cd17-4ebe-a8fb-7fcba84e7381",
+            "run_id": kwargs["run_id"],
+            "delivery_target_id": kwargs["delivery_target_id"],
+            "status": "delivered",
+        },
+    )
+    monkeypatch.setattr(
+        app_module.delivery_runner,
+        "list_recent_delivery_jobs",
+        lambda limit=20: [{"delivery_job_id": "job-1", "status": "delivered"}],
+    )
+    monkeypatch.setattr(
+        app_module.delivery_runner,
+        "list_recent_delivery_attempts",
+        lambda limit=50, run_id=None: [{"attempt_status": "delivered"}],
+    )
+    monkeypatch.setattr(
+        app_module.delivery_runner,
+        "latest_delivery_summary_for_run",
+        lambda run_id: {"run_id": run_id, "status": "delivered"},
+    )
+    monkeypatch.setattr(
+        app_module.delivery_runner,
+        "list_delivery_records_for_run",
+        lambda run_id, limit=200: [{"run_id": run_id, "customer_id": "cust_001"}],
+    )
+
+    targets_resp = client.get(
+        "/v1/admin/control-plane/delivery-targets",
+        headers=_headers(ADMIN_KEY),
+    )
+    trigger_resp = client.post(
+        "/v1/admin/delivery/trigger",
+        json={"run_id": "e0f62885-0dbc-4d53-b1d5-59fd0be558e2"},
+        headers=_headers(ADMIN_KEY),
+    )
+    jobs_resp = client.get(
+        "/v1/admin/delivery/jobs/recent?limit=10",
+        headers=_headers(ADMIN_KEY),
+    )
+    attempts_resp = client.get(
+        "/v1/admin/delivery/attempts/recent?limit=10",
+        headers=_headers(ADMIN_KEY),
+    )
+    summary_resp = client.get(
+        "/v1/admin/delivery/runs/e0f62885-0dbc-4d53-b1d5-59fd0be558e2/latest-summary",
+        headers=_headers(ADMIN_KEY),
+    )
+    records_resp = client.get(
+        "/v1/admin/delivery/runs/e0f62885-0dbc-4d53-b1d5-59fd0be558e2/records?limit=10",
+        headers=_headers(ADMIN_KEY),
+    )
+
+    assert targets_resp.status_code == 200
+    assert targets_resp.json()["default_delivery_target_id"] == "crm_postgres_outbox"
+    assert trigger_resp.status_code == 200
+    assert trigger_resp.json()["status"] == "delivered"
+    assert jobs_resp.status_code == 200
+    assert jobs_resp.json()["count"] == 1
+    assert attempts_resp.status_code == 200
+    assert attempts_resp.json()["count"] == 1
+    assert summary_resp.status_code == 200
+    assert summary_resp.json()["status"] == "delivered"
+    assert records_resp.status_code == 200
+    assert records_resp.json()["count"] == 1
 
 
 def test_campaign_role_cannot_update_defaults_or_trigger_run():
@@ -366,9 +477,18 @@ def test_campaign_role_cannot_update_defaults_or_trigger_run():
         ("get", "/v1/admin/control-plane/model"),
         ("get", "/v1/admin/control-plane/defaults"),
         ("get", "/v1/admin/control-plane/integrations"),
+        ("get", "/v1/admin/control-plane/delivery-targets"),
         ("get", "/v1/admin/control-plane/policies"),
         ("get", "/v1/admin/runs/recent"),
         ("get", "/v1/admin/runs/latest-summary"),
+        ("post", "/v1/admin/delivery/trigger"),
+        ("get", "/v1/admin/delivery/jobs/recent"),
+        ("get", "/v1/admin/delivery/attempts/recent"),
+        (
+            "get",
+            "/v1/admin/delivery/runs/e0f62885-0dbc-4d53-b1d5-59fd0be558e2/latest-summary",
+        ),
+        ("get", "/v1/admin/delivery/runs/e0f62885-0dbc-4d53-b1d5-59fd0be558e2/records"),
         ("get", "/v1/admin/index/generations/latest"),
         ("get", "/v1/admin/index/generations"),
         ("post", "/v1/admin/index/generations/validate-latest"),

@@ -6,7 +6,6 @@ import socket
 import subprocess
 import time
 from pathlib import Path
-from uuid import uuid4
 
 import pytest
 import yaml
@@ -23,6 +22,8 @@ except ImportError:  # pragma: no cover
 
 from pipelines.minimal_slice import config as minimal_config
 from pipelines.minimal_slice import (
+    delivery_runner,
+    delivery_store,
     export_table,
     feature_mart,
     lifecycle_audit,
@@ -41,6 +42,9 @@ CLICKHOUSE_SCHEMA_SQL = (
 )
 EXPORT_STAGING_MIGRATION_SQL = (
     ROOT / "infra" / "postgres" / "migrations" / "005_export_staging.sql"
+)
+DELIVERY_LAYER_MIGRATION_SQL = (
+    ROOT / "infra" / "postgres" / "migrations" / "006_delivery_layer.sql"
 )
 SERVICE_PORTS = {
     "postgres": 5432,
@@ -158,9 +162,7 @@ def _required_endpoints() -> dict[str, tuple[str, int]]:
     }
 
 
-def _clickhouse_client(
-    *args: str, input_text: str | None = None
-) -> subprocess.CompletedProcess[str]:
+def _clickhouse_client(*args: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
     cmd = [
         "docker",
         "compose",
@@ -180,13 +182,15 @@ def _clickhouse_client(
         "audience_engine",
         *args,
     ]
-    return subprocess.run(
-        cmd,
-        input=input_text,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+
+    kwargs = {
+        "text": True,
+        "capture_output": True,
+    }
+    if input_text is not None:
+        kwargs["input"] = input_text
+
+    return subprocess.run(cmd, **kwargs)
 
 
 def _wait_for_postgres_ready(
@@ -309,58 +313,15 @@ def _seed_clickhouse_feature_slice() -> None:
     assert insert.returncode == 0, insert.stderr
 
 
-def _ensure_export_staging_table(*, postgres_host: str, postgres_port: int) -> None:
+def _ensure_delivery_tables(*, postgres_host: str, postgres_port: int) -> None:
     conninfo = _postgres_conninfo(host=postgres_host, port=postgres_port)
     with psycopg.connect(conninfo) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT to_regclass('public.audience_export_staging')")
             existing = cur.fetchone()
-            if existing and existing[0]:
-                return
-            cur.execute(EXPORT_STAGING_MIGRATION_SQL.read_text(encoding="utf-8"))
-        conn.commit()
-
-
-def _insert_minimal_audience_run(
-    run_id: str,
-    campaign_id: str,
-    *,
-    postgres_host: str,
-    postgres_port: int,
-) -> None:
-    conninfo = _postgres_conninfo(host=postgres_host, port=postgres_port)
-    with psycopg.connect(conninfo) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO audience_run (
-                    run_id, campaign_id, product_id, run_ts, version_bundle, parameters
-                ) VALUES (
-                    %s::uuid, %s, %s, now(), %s::jsonb, %s::jsonb
-                )
-                ON CONFLICT (run_id) DO NOTHING
-                """,
-                (
-                    run_id,
-                    campaign_id,
-                    "integration_e2e",
-                    json.dumps(
-                        {
-                            "fs_version": "fs_credit_v1",
-                            "emb_version": (
-                                "fs_credit_v1+prompt_credit_v1+nomic-embed-text"
-                            ),
-                            "model_version": "nomic-embed-text",
-                            "policy_version": "policy_credit_v1",
-                            "index_alias": "audience-serving",
-                            "concrete_qdrant_collection": "manual",
-                            "run_id": run_id,
-                            "campaign_id": campaign_id,
-                        }
-                    ),
-                    json.dumps({"source": "test"}),
-                ),
-            )
+            if not (existing and existing[0]):
+                cur.execute(EXPORT_STAGING_MIGRATION_SQL.read_text(encoding="utf-8"))
+            cur.execute(DELIVERY_LAYER_MIGRATION_SQL.read_text(encoding="utf-8"))
         conn.commit()
 
 
@@ -392,7 +353,7 @@ def test_clickhouse_postgres_export_profile_live_e2e(monkeypatch):
         if not _wait_for_clickhouse_ready():
             pytest.skip("clickhouse did not become ready in time")
 
-        _ensure_export_staging_table(postgres_host=pg_host, postgres_port=pg_port)
+        _ensure_delivery_tables(postgres_host=pg_host, postgres_port=pg_port)
         _seed_clickhouse_feature_slice()
 
         monkeypatch.setattr(storage.config, "CLICKHOUSE_HOST", ch_host)
@@ -446,47 +407,33 @@ def test_clickhouse_postgres_export_profile_live_e2e(monkeypatch):
             export_table, "EXPORT_POSTGRES_TABLE", "audience_export_staging"
         )
         monkeypatch.setattr(export_table, "EXPORT_POSTGRES_SSLMODE", "")
+        monkeypatch.setattr(delivery_store, "POSTGRES_HOST", pg_host)
+        monkeypatch.setattr(delivery_store, "POSTGRES_PORT", pg_port)
+        monkeypatch.setattr(delivery_store, "POSTGRES_DB", "audience_engine")
+        monkeypatch.setattr(delivery_store, "POSTGRES_USER", "audience_engine")
+        monkeypatch.setattr(delivery_store, "POSTGRES_PASSWORD", "change_me")
+        monkeypatch.setattr(delivery_store, "POSTGRES_SSLMODE", "")
 
         monkeypatch.setattr(feature_mart, "minio_is_configured", lambda: False)
         monkeypatch.setattr(
             run_flow, "build_embeddings", _write_cpu_embeddings_for_run_flow
         )
-        # Export staging has FK(run_id) -> audience_run(run_id). The current
-        # runtime writes export rows before audit run-row insert, so we pre-seed
-        # a minimal audience_run row in this test and skip duplicate audit write.
-        original_build_bundle = run_flow._build_and_validate_bundle
-
-        def _build_bundle_with_seeded_run(campaign_id: str, *, policy_version: str):
-            bundle = original_build_bundle(
-                campaign_id=campaign_id,
-                policy_version=policy_version,
-            )
-            _insert_minimal_audience_run(
-                run_id=bundle.run_id,
-                campaign_id=bundle.campaign_id,
-                postgres_host=pg_host,
-                postgres_port=pg_port,
-            )
-            return bundle
-
-        monkeypatch.setattr(
-            run_flow,
-            "_build_and_validate_bundle",
-            _build_bundle_with_seeded_run,
-        )
-        monkeypatch.setattr(run_flow, "_write_audit_to_postgres", lambda **kwargs: None)
 
         summary = run_flow.run_minimal_vertical_slice(
             campaign_id="camp_clickhouse_postgres_e2e",
             policy_version="policy_credit_v1",
             integration_profile_id="clickhouse_postgres_export",
+            delivery_target_id="crm_postgres_outbox",
             requested_size=3,
         )
 
         assert summary["status"] == "ok"
         assert summary["operations"]["source_id"] == "clickhouse_feature_slice"
         assert summary["operations"]["export_id"] == "postgres_export_table"
+        assert summary["operations"]["delivery_target_id"] == "crm_postgres_outbox"
         assert summary["export"]["rows_written"] >= 1
+        assert summary["delivery"]["status"] == "delivered"
+        assert summary["delivery"]["rows_delivered"] >= 1
 
         feature_mart_rows = _read_jsonl(Path(summary["inputs"]["feature_mart_path"]))
         feature_mart_ids = {row["customer_id"] for row in feature_mart_rows}
@@ -527,49 +474,117 @@ def test_clickhouse_postgres_export_profile_live_e2e(monkeypatch):
             assert isinstance(row[7], dict)
             assert isinstance(row[7].get("reason_codes", []), list)
 
-        duplicate_run_id = str(uuid4())
-        _insert_minimal_audience_run(
-            run_id=duplicate_run_id,
-            campaign_id="camp_export_conflict_counts",
-            postgres_host=pg_host,
-            postgres_port=pg_port,
-        )
-        duplicate_policy_result = {
-            "results": [
-                {"customer_id": "dup_cust_1", "decision": "approve", "score": 0.88},
-                {"customer_id": "dup_cust_2", "decision": "approve", "score": 0.66},
-            ]
-        }
-        duplicate_context = {
-            "run_id": duplicate_run_id,
-            "campaign_id": "camp_export_conflict_counts",
-            "policy_version": "policy_credit_v1",
-            "fs_version": "fs_credit_v1",
-            "emb_version": "fs_credit_v1+prompt_credit_v1+nomic-embed-text",
-            "model_version": "nomic-embed-text",
-            "index_alias": "audience-serving",
-            "index_generation": summary["versions"]["concrete_qdrant_collection"],
-            "integration_profile_id": "clickhouse_postgres_export",
-            "source_id": "clickhouse_feature_slice",
-            "export_id": "postgres_export_table",
-            "channel": "email",
-            "exported_ts": summary["run_ts"],
-        }
+        with psycopg.connect(_postgres_conninfo(host=pg_host, port=pg_port)) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        run_id::text,
+                        campaign_id,
+                        customer_id,
+                        delivery_target_id,
+                        outbox_status,
+                        policy_version,
+                        integration_profile_id,
+                        source_id,
+                        export_target_id,
+                        payload
+                    FROM audience_crm_postgres_outbox
+                    WHERE run_id = %s::uuid
+                    ORDER BY customer_id
+                    """,
+                    (run_id,),
+                )
+                outbox_rows = cur.fetchall()
+                cur.execute(
+                    """
+                    SELECT
+                        run_id::text,
+                        customer_id,
+                        delivery_target_id,
+                        delivery_status,
+                        policy_version,
+                        integration_profile_id,
+                        source_id,
+                        export_target_id
+                    FROM audience_delivery_record
+                    WHERE run_id = %s::uuid
+                    ORDER BY customer_id
+                    """,
+                    (run_id,),
+                )
+                delivery_rows = cur.fetchall()
+                cur.execute(
+                    """
+                    SELECT status
+                    FROM audience_delivery_job
+                    WHERE run_id = %s::uuid
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """,
+                    (run_id,),
+                )
+                latest_job_status = cur.fetchone()[0]
+                cur.execute(
+                    """
+                    SELECT attempt_status
+                    FROM audience_delivery_attempt
+                    WHERE run_id = %s::uuid
+                    ORDER BY attempt_ts ASC, id ASC
+                    """,
+                    (run_id,),
+                )
+                attempt_statuses = [r[0] for r in cur.fetchall()]
 
-        first = export_table.write_approved_to_postgres_export_table(
-            policy_result=duplicate_policy_result,
-            export_context=duplicate_context,
+        assert len(outbox_rows) >= 1
+        assert len(delivery_rows) == len(outbox_rows)
+        assert latest_job_status == "delivered"
+        assert attempt_statuses[:2] == ["pending", "materialized"]
+        assert attempt_statuses[-1] == "delivered"
+
+        for row in outbox_rows:
+            assert row[0] == run_id
+            assert row[1] == "camp_clickhouse_postgres_e2e"
+            assert row[3] == "crm_postgres_outbox"
+            assert row[4] == "pending"
+            assert row[5] == "policy_credit_v1"
+            assert row[6] == "clickhouse_postgres_export"
+            assert row[7] == "clickhouse_feature_slice"
+            assert row[8] == "postgres_export_table"
+            assert isinstance(row[9], dict)
+
+        for row in delivery_rows:
+            assert row[0] == run_id
+            assert row[2] == "crm_postgres_outbox"
+            assert row[3] == "delivered"
+            assert row[4] == "policy_credit_v1"
+            assert row[5] == "clickhouse_postgres_export"
+            assert row[6] == "clickhouse_feature_slice"
+            assert row[7] == "postgres_export_table"
+
+        second_delivery = delivery_runner.execute_delivery_for_run(
+            run_id=run_id,
+            delivery_target_id="crm_postgres_outbox",
+            trigger_source="integration:test",
+            requested_by_role="system_internal",
+            requested_by_id="system:test",
         )
-        second = export_table.write_approved_to_postgres_export_table(
-            policy_result=duplicate_policy_result,
-            export_context=duplicate_context,
-        )
-        assert first["rows_attempted"] == 2
-        assert first["rows_written"] == 2
-        assert first["rows_skipped_conflict"] == 0
-        assert second["rows_attempted"] == 2
-        assert second["rows_written"] == 0
-        assert second["rows_skipped_conflict"] == 2
+        assert second_delivery["status"] == "skipped_conflict"
+        assert second_delivery["rows_delivered"] == 0
+        assert second_delivery["rows_skipped_conflict"] == len(outbox_rows)
+
+        with psycopg.connect(_postgres_conninfo(host=pg_host, port=pg_port)) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT count(*)
+                    FROM audience_crm_postgres_outbox
+                    WHERE run_id = %s::uuid
+                    """,
+                    (run_id,),
+                )
+                outbox_count_after_retry = int(cur.fetchone()[0])
+        assert outbox_count_after_retry == len(outbox_rows)
     finally:
         if started_by_test and not _prefer_stack_preservation():
             _compose("stop", *sorted(started_by_test))

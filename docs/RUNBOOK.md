@@ -25,7 +25,7 @@ Use this sequence for operational usage.
 3. (Optional) Update operator defaults:
    ```bash
    curl -X PUT -H "X-AE-API-Key: ${AE_ADMIN_KEY}" -H "Content-Type: application/json" \
-     -d '{"default_policy_version":"policy_credit_v1","default_integration_profile_id":"clickhouse_postgres_export"}' \
+     -d '{"default_policy_version":"policy_credit_v1","default_integration_profile_id":"clickhouse_postgres_export","default_delivery_target_id":"crm_postgres_outbox"}' \
      http://localhost:8000/v1/admin/control-plane/defaults
    ```
 4. Trigger main run (policy/profile can be overridden per run):
@@ -48,6 +48,20 @@ Use this sequence for operational usage.
    ```bash
    curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" "http://localhost:8000/v1/admin/index/lifecycle-audit?limit=20"
    curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" http://localhost:8000/v1/policy/decisions/<run_id>/<customer_id>
+   ```
+7. Inspect delivery target readiness and per-run delivery details:
+   ```bash
+   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" \
+     http://localhost:8000/v1/admin/control-plane/delivery-targets
+
+   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" \
+     "http://localhost:8000/v1/admin/delivery/jobs/recent?limit=20"
+
+   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" \
+     "http://localhost:8000/v1/admin/delivery/attempts/recent?limit=50"
+
+   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" \
+     http://localhost:8000/v1/admin/delivery/runs/<run_id>/latest-summary
    ```
 
 ## Audit Sink Bring-up
@@ -130,6 +144,11 @@ docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml cp po
   - `EXPORT_POSTGRES_HOST`, `EXPORT_POSTGRES_PORT`, `EXPORT_POSTGRES_DB`
   - `EXPORT_POSTGRES_USER`, `EXPORT_POSTGRES_PASSWORD`
   - `EXPORT_POSTGRES_SCHEMA`, `EXPORT_POSTGRES_TABLE`
+- Delivery registry:
+  - `governance/delivery/delivery_registry.yaml`
+  - implemented: `crm_csv_file`, `crm_postgres_outbox`
+  - planned only: `crm_api_future`, `acrm_api_future`
+- Delivery source of truth remains `audience_export_staging`; no direct policy-result bypass is used for delivery.
 - If MinIO credentials are unset/invalid, feature-mart Parquet and export uploads fail fast during runtime operations.
 - If Redis cache is unavailable, embedding runs fail; disable cache explicitly with `REDIS_EMBEDDING_CACHE_ENABLED=0` for emergency bypass.
 
@@ -210,4 +229,14 @@ docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml exec 
    docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml exec postgres \
      psql -U "${POSTGRES_USER:-audience_engine}" -d "${POSTGRES_DB:-audience_engine}" \
      -c "SELECT run_id, campaign_id, customer_id, final_score, rank, policy_version, exported_ts FROM audience_export_staging ORDER BY exported_ts DESC LIMIT 20;"
+   ```
+7. Inspect delivery outbox + delivery records (when `delivery_target_id=crm_postgres_outbox`):
+   ```bash
+   docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml exec postgres \
+     psql -U "${POSTGRES_USER:-audience_engine}" -d "${POSTGRES_DB:-audience_engine}" \
+     -c "SELECT run_id, customer_id, delivery_target_id, outbox_status, created_at FROM audience_crm_postgres_outbox ORDER BY created_at DESC LIMIT 20;"
+
+   docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml exec postgres \
+     psql -U "${POSTGRES_USER:-audience_engine}" -d "${POSTGRES_DB:-audience_engine}" \
+     -c "SELECT run_id, customer_id, delivery_target_id, delivery_status, delivered_ts FROM audience_delivery_record ORDER BY created_at DESC LIMIT 20;"
    ```

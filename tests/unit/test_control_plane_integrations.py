@@ -31,8 +31,10 @@ def test_resolve_run_configuration_uses_defaults_and_request_override(
     defaults = control_plane.save_operator_defaults(
         default_policy_version="policy_credit_v1",
         default_integration_profile_id="local_snapshot_local_export",
+        default_delivery_target_id="crm_postgres_outbox",
     )
     assert defaults.default_policy_version == "policy_credit_v1"
+    assert defaults.default_delivery_target_id == "crm_postgres_outbox"
 
     resolved_default = control_plane.resolve_run_configuration(
         policy_version=None,
@@ -41,15 +43,19 @@ def test_resolve_run_configuration_uses_defaults_and_request_override(
     assert resolved_default.policy_selection_source == "operator_default"
     assert resolved_default.integration_selection_source == "operator_default"
     assert resolved_default.integration_profile_id == "local_snapshot_local_export"
+    assert resolved_default.delivery_target_id == "crm_postgres_outbox"
 
     resolved_request = control_plane.resolve_run_configuration(
         policy_version="policy_credit_v1",
         integration_profile_id="clickhouse_postgres_export",
+        delivery_target_id="crm_csv_file",
     )
     assert resolved_request.policy_selection_source == "request"
     assert resolved_request.integration_selection_source == "request"
+    assert resolved_request.delivery_selection_source == "request"
     assert resolved_request.source_id == "clickhouse_feature_slice"
     assert resolved_request.export_id == "postgres_export_table"
+    assert resolved_request.delivery_target_id == "crm_csv_file"
 
 
 def test_resolve_run_configuration_rejects_planned_profile(monkeypatch, tmp_path):
@@ -64,6 +70,21 @@ def test_resolve_run_configuration_rejects_planned_profile(monkeypatch, tmp_path
         )
 
 
+def test_resolve_run_configuration_rejects_planned_delivery_target(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        control_plane, "OPERATOR_STATE_PATH", tmp_path / "operator_state.json"
+    )
+
+    with pytest.raises(ValueError, match="Selected delivery target is not implemented"):
+        control_plane.resolve_run_configuration(
+            policy_version="policy_credit_v1",
+            integration_profile_id="clickhouse_postgres_export",
+            delivery_target_id="acrm_api_future",
+        )
+
+
 def test_load_operator_defaults_falls_back_from_planned_profile(monkeypatch, tmp_path):
     state_path = tmp_path / "operator_state.json"
     monkeypatch.setattr(control_plane, "OPERATOR_STATE_PATH", state_path)
@@ -72,6 +93,7 @@ def test_load_operator_defaults_falls_back_from_planned_profile(monkeypatch, tmp
             {
                 "default_policy_version": "policy_credit_v1",
                 "default_integration_profile_id": "salesforce_future_profile",
+                "default_delivery_target_id": "crm_api_future",
             }
         ),
         encoding="utf-8",
@@ -80,6 +102,7 @@ def test_load_operator_defaults_falls_back_from_planned_profile(monkeypatch, tmp
     defaults = control_plane.load_operator_defaults()
     assert defaults.default_policy_version == "policy_credit_v1"
     assert defaults.default_integration_profile_id == "local_snapshot_local_export"
+    assert defaults.default_delivery_target_id == "crm_csv_file"
 
 
 def test_save_operator_defaults_rejects_unknown_policy(monkeypatch, tmp_path):
@@ -102,6 +125,15 @@ def test_save_operator_defaults_rejects_planned_profile(monkeypatch, tmp_path):
         control_plane.save_operator_defaults(
             default_integration_profile_id="salesforce_future_profile"
         )
+
+
+def test_save_operator_defaults_rejects_planned_delivery_target(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        control_plane, "OPERATOR_STATE_PATH", tmp_path / "operator_state.json"
+    )
+
+    with pytest.raises(ValueError, match="Default delivery target is not implemented"):
+        control_plane.save_operator_defaults(default_delivery_target_id="crm_api_future")
 
 
 def test_operational_model_declares_distinct_orchestrators():

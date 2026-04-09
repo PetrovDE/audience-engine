@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "data" / "minimal_slice"
 RUN_DIR = DATA_DIR / "run"
+DELIVERY_DIR = DATA_DIR / "delivery"
 RAW_PATH = RUN_DIR / "synthetic_customers.jsonl"
 BLACKLIST_PATH = RUN_DIR / "blacklist.txt"
 COMM_HISTORY_PATH = RUN_DIR / "comm_history.jsonl"

@@ -65,6 +65,7 @@ Additionally, minimal-slice runtime validates the full produced embeddings artif
 - `governance/contracts/feature_mart.yaml`: transformed feature mart schema contract.
 - `governance/dictionaries/reason_codes.yaml`: versioned policy outcome reason-code dictionary (single-registry with changelog entries per semantic change).
 - `governance/integrations/integration_registry.yaml`: operational integration catalog (source connectors, export targets, integration profiles with implemented vs planned status).
+- `governance/delivery/delivery_registry.yaml`: governed delivery-target catalog (implemented CRM handoff targets vs planned direct API targets).
 
 ## Change Management
 - Registries and contracts are immutable by version.

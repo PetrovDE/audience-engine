@@ -1,0 +1,28 @@
+version: 1
+registry: delivery_registry
+owner: platform-operations
+updated_at: 2026-04-09
+delivery_targets:
+  - delivery_target_id: crm_csv_file
+    display_name: CRM CSV File Handoff
+    implementation_status: implemented
+    delivery_mode: file_materialization
+    description: Materialize policy-approved staged rows to a deterministic CSV artifact for manual CRM handoff.
+
+  - delivery_target_id: crm_postgres_outbox
+    display_name: CRM Postgres Outbox
+    implementation_status: implemented
+    delivery_mode: postgres_outbox
+    description: Write policy-approved staged rows to append-only Postgres outbox rows for machine-consumable downstream delivery.
+
+  - delivery_target_id: crm_api_future
+    display_name: CRM API Direct Push
+    implementation_status: planned
+    delivery_mode: api_push
+    description: Planned direct CRM API delivery target. Not implemented in this phase.
+
+  - delivery_target_id: acrm_api_future
+    display_name: ACRM API Direct Push
+    implementation_status: planned
+    delivery_mode: api_push
+    description: Planned direct ACRM API delivery target. Not implemented in this phase.

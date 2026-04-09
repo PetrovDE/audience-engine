@@ -36,11 +36,14 @@ def test_run_flow_binds_selected_policy_version_into_runtime(monkeypatch, tmp_pa
         run_flow.control_plane,
         "resolve_run_configuration",
         lambda policy_version,
-        integration_profile_id: control_plane.OperationalRunConfig(
+        integration_profile_id,
+        delivery_target_id=None: control_plane.OperationalRunConfig(
             policy_version=selected_policy,
             policy_selection_source="request",
             integration_profile_id="local_snapshot_local_export",
             integration_selection_source="operator_default",
+            delivery_target_id="crm_csv_file",
+            delivery_selection_source="operator_default",
             source_id="snapshot_jsonl",
             export_id="local_jsonl",
         ),
@@ -173,6 +176,18 @@ def test_run_flow_binds_selected_policy_version_into_runtime(monkeypatch, tmp_pa
 
     monkeypatch.setattr(
         run_flow.integrations, "export_for_profile", _export_for_profile
+    )
+    monkeypatch.setattr(
+        run_flow.delivery_runner,
+        "execute_delivery_for_run",
+        lambda **kwargs: {
+            "delivery_job_id": "1e726769-9f5b-4dcf-8a3f-f2cc5bf46cd8",
+            "delivery_target_id": "crm_csv_file",
+            "status": "delivered",
+            "rows_delivered": 1,
+            "rows_skipped_conflict": 0,
+            "artifact_uri": str(tmp_path / "crm_delivery_audience.csv"),
+        },
     )
     monkeypatch.setattr(run_flow, "_write_audit_to_postgres", lambda **kwargs: None)
     monkeypatch.setattr(run_flow, "SUMMARY_PATH", tmp_path / "summary.json")

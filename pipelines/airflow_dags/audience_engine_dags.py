@@ -11,7 +11,12 @@ from typing import Any
 from airflow import DAG
 from airflow.operators.python import PythonOperator, get_current_context
 
-from pipelines.minimal_slice import control_plane, integrations, lifecycle_service
+from pipelines.minimal_slice import (
+    control_plane,
+    delivery_runner,
+    integrations,
+    lifecycle_service,
+)
 from pipelines.minimal_slice.config import (
     EMBEDDING_MODEL_VERSION,
     FEATURE_MART_PATH,
@@ -80,6 +85,8 @@ def _build_operation_context(
         "policy_selection_source": run_config.policy_selection_source,
         "integration_profile_id": run_config.integration_profile_id,
         "integration_selection_source": run_config.integration_selection_source,
+        "delivery_target_id": run_config.delivery_target_id,
+        "delivery_selection_source": run_config.delivery_selection_source,
         "source_id": run_config.source_id,
         "export_id": run_config.export_id,
         "requested_size": requested_size,
@@ -92,6 +99,7 @@ def _append_airflow_run_event(
     versions = summary.get("versions", {})
     quality = summary.get("quality", {})
     export = summary.get("export", {})
+    delivery = summary.get("delivery", {})
     airflow_run_id = str(get_current_context().get("run_id", "manual"))
     control_plane.append_run_event(
         {
@@ -106,9 +114,12 @@ def _append_airflow_run_event(
             "integration_profile_id": operation_context.get("integration_profile_id"),
             "source_id": operation_context.get("source_id"),
             "export_id": operation_context.get("export_id"),
+            "delivery_target_id": operation_context.get("delivery_target_id"),
             "quality_status": quality.get("status"),
             "export_status": export.get("status"),
             "export_uri": export.get("export_uri"),
+            "delivery_status": delivery.get("status"),
+            "delivery_job_id": delivery.get("delivery_job_id"),
             "error": quality.get("error"),
         }
     )
@@ -123,6 +134,7 @@ def task_prepare_context() -> dict[str, Any]:
     run_config = control_plane.resolve_run_configuration(
         policy_version=conf.get("policy_version"),
         integration_profile_id=conf.get("integration_profile_id"),
+        delivery_target_id=conf.get("delivery_target_id"),
     )
     campaign_id = conf.get("campaign_id") or f"airflow-{ctx.get('run_id', 'manual')}"
     bundle = _build_and_validate_bundle(
@@ -279,6 +291,26 @@ def task_export_and_audit() -> dict[str, Any]:
         ],
     }
     run_ts = datetime.now(timezone.utc).isoformat()
+    run_row, selected_rows, rejection_rows, decision_rows = _build_audit_rows(
+        retrieved=retrieved,
+        policy_result=policy_result,
+        bundle=bundle,
+        run_ts=run_ts,
+        product_id="minimal_slice_airflow",
+        channel="email",
+        resolved_collection=index_meta["collection"],
+        operation_context=op_ctx,
+        export_context={
+            "status": "pending",
+            "delivery_target_id": op_ctx["delivery_target_id"],
+        },
+    )
+    _write_audit_to_postgres(
+        run_row=run_row,
+        selected_rows=selected_rows,
+        rejection_rows=rejection_rows,
+        decision_rows=decision_rows,
+    )
     export_context = {
         "run_id": bundle.run_id,
         "campaign_id": bundle.campaign_id,
@@ -300,24 +332,6 @@ def task_export_and_audit() -> dict[str, Any]:
         run_id=bundle.run_id,
         output_path=ROOT / "data" / "minimal_slice" / "run" / "approved_audience.jsonl",
         export_context=export_context,
-    )
-
-    run_row, selected_rows, rejection_rows, decision_rows = _build_audit_rows(
-        retrieved=retrieved,
-        policy_result=policy_result,
-        bundle=bundle,
-        run_ts=run_ts,
-        product_id="minimal_slice_airflow",
-        channel="email",
-        resolved_collection=index_meta["collection"],
-        operation_context=op_ctx,
-        export_context=export_result,
-    )
-    _write_audit_to_postgres(
-        run_row=run_row,
-        selected_rows=selected_rows,
-        rejection_rows=rejection_rows,
-        decision_rows=decision_rows,
     )
 
     summary = {
@@ -349,6 +363,25 @@ def task_export_and_audit() -> dict[str, Any]:
         },
     }
 
+    SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with SUMMARY_PATH.open("w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2)
+    return summary
+
+
+def task_execute_delivery() -> dict[str, Any]:
+    summary = _require_payload("export_and_audit")
+    versions = summary["versions"]
+    op_ctx = summary["operations"]
+    airflow_run_id = str(get_current_context().get("run_id", "manual"))
+    delivery_result = delivery_runner.execute_delivery_for_run(
+        run_id=versions["run_id"],
+        delivery_target_id=op_ctx["delivery_target_id"],
+        trigger_source=f"system:airflow:{airflow_run_id}",
+        requested_by_role="system_internal",
+        requested_by_id=f"system:airflow:{airflow_run_id}",
+    )
+    summary["delivery"] = delivery_result
     SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
     with SUMMARY_PATH.open("w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
@@ -412,12 +445,16 @@ def _build_pipeline_dag(
             task_id="export_and_audit",
             python_callable=task_export_and_audit,
         )
+        execute_delivery_task = PythonOperator(
+            task_id="execute_delivery",
+            python_callable=task_execute_delivery,
+        )
 
         prepare_context >> seed_and_validate_raw >> build_feature_mart_task
         build_feature_mart_task >> build_embeddings_task >> build_generation_task
         build_generation_task >> validate_generation_task >> promote_alias_task
         promote_alias_task >> retrieve_candidates_task >> policy_gate_task
-        policy_gate_task >> export_and_audit_task
+        policy_gate_task >> export_and_audit_task >> execute_delivery_task
 
     return dag
 

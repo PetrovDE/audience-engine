@@ -1,11 +1,13 @@
 {
-  "run_ts": "2026-04-09T15:04:54.721360+00:00",
+  "run_ts": "2026-04-09T17:00:05.835328+00:00",
   "status": "ok",
   "operations": {
     "policy_version": "policy_credit_v1",
     "policy_selection_source": "request",
     "integration_profile_id": "clickhouse_postgres_export",
     "integration_selection_source": "request",
+    "delivery_target_id": "crm_postgres_outbox",
+    "delivery_selection_source": "request",
     "source_id": "clickhouse_feature_slice",
     "export_id": "postgres_export_table",
     "requested_size": 3,
@@ -18,8 +20,8 @@
     "model_version": "nomic-embed-text",
     "policy_version": "policy_credit_v1",
     "index_alias": "audience-serving",
-    "concrete_qdrant_collection": "audience-serving-fs_credit_v1-24df75a1",
-    "run_id": "24df75a1-9912-4689-a458-4814d19f8aa2",
+    "concrete_qdrant_collection": "audience-serving-fs_credit_v1-06f37621",
+    "run_id": "06f37621-423e-49d9-814a-7776b8509d09",
     "campaign_id": "camp_clickhouse_postgres_e2e"
   },
   "inputs": {
@@ -81,8 +83,8 @@
   "index": {
     "stage": "promote_alias",
     "alias": "audience-serving",
-    "collection": "audience-serving-fs_credit_v1-24df75a1",
-    "previous_collection": null
+    "collection": "audience-serving-fs_credit_v1-06f37621",
+    "previous_collection": "audience-serving-fs_credit_v1-96ded8c3"
   },
   "retrieval": {
     "query_customer_id": "cust_00000",
@@ -113,6 +115,19 @@
     "source_id": "clickhouse_feature_slice",
     "export_id": "postgres_export_table",
     "profile_status": "implemented"
+  },
+  "delivery": {
+    "delivery_job_id": "b5288f32-fd6a-42bd-8384-38915828d759",
+    "run_id": "06f37621-423e-49d9-814a-7776b8509d09",
+    "campaign_id": "camp_clickhouse_postgres_e2e",
+    "delivery_target_id": "crm_postgres_outbox",
+    "status": "delivered",
+    "source_row_count": 3,
+    "rows_materialized": 3,
+    "rows_delivered": 3,
+    "rows_skipped_conflict": 0,
+    "artifact_uri": null,
+    "completed_at": "2026-04-09T17:00:06.088686+00:00"
   },
   "audit": {
     "postgres": {

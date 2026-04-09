@@ -8,7 +8,12 @@ This document defines the required test layout and execution model for Architect
 - `tests/unit/test_point_ids.py`
 - `tests/unit/test_policy_engine.py`
 - `tests/unit/test_version_bundle_preflight.py`
+- `tests/unit/test_delivery_contract_registry.py`
+- `tests/unit/test_delivery_csv_target.py`
+- `tests/unit/test_delivery_outbox_idempotency.py`
 - `tests/integration/test_minimal_slice_smoke.py`
+- `tests/integration/test_clickhouse_postgres_export_e2e.py`
+- `tests/integration/test_retrieval_api_smoke.py`
 
 ## Coverage Mapping
 - Contracts:
@@ -23,6 +28,9 @@ This document defines the required test layout and execution model for Architect
   - Deterministic Qdrant point IDs.
   - Policy registry execution, reason-code handling, and quota behavior.
   - Version bundle preflight guards.
+  - Delivery contract + delivery registry behavior.
+  - CRM CSV materialization ordering/schema.
+  - Postgres outbox idempotent conflict handling.
 - Integration smoke:
   - Compose bring-up.
   - Seed synthetic data.
@@ -31,6 +39,8 @@ This document defines the required test layout and execution model for Architect
   - Promote alias.
   - Retrieval -> policy -> export.
   - Verify Postgres audit rows exist.
+  - Verify governed delivery from `audience_export_staging` to `crm_postgres_outbox`.
+  - Verify delivery admin endpoints and RBAC behavior.
 
 ## CI Modes
 - CPU-first by default:
