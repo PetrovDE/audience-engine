@@ -20,8 +20,8 @@ runtime-minimal-slice = [
   "pyarrow==21.0.0",
   "prometheus-client==0.22.1",
   "psycopg[binary]==3.2.9",
-  "pyyaml==6.0.2",
-  "qdrant-client==1.15.1",
+  "pyyaml==6.0.3",
+  "qdrant-client==1.17.1",
   "redis==6.4.0",
 ]
 dev = [

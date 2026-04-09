@@ -155,7 +155,6 @@ def retrieve_similar(
         if query_customer_id:
             query_point_filter = Filter(
                 must=[
-                    *(ann_filter.must if ann_filter and ann_filter.must else []),
                     FieldCondition(
                         key="customer_id", match=MatchValue(value=query_customer_id)
                     ),
@@ -176,13 +175,14 @@ def retrieve_similar(
             embedder = OllamaEmbeddings(model=ollama_model, base_url=OLLAMA_BASE_URL)
             query_vector = embedder.embed_query(query_text or "")
 
-        hits = client.search(
+        query_response = client.query_points(
             collection_name=QDRANT_ALIAS,
-            query_vector=query_vector,
+            query=query_vector,
             query_filter=ann_filter,
             limit=top_k,
             with_payload=True,
         )
+        hits = query_response.points
 
         results = []
         for h in hits:

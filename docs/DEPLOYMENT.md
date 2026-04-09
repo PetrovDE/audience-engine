@@ -25,15 +25,26 @@ Source of truth:
 
 Base image:
 
-- `apache/airflow:3.1.8-python3.11`
+- `apache/airflow:3.2.0-python3.11`
 
 Both compose files use the same build strategy:
 
-- image tag: `audience-engine-airflow:3.1.8-python3.11`
+- image tag: `audience-engine-airflow:3.2.0-python3.11`
 - build context: `infra/`
 - dockerfile path: `infra/airflow/Dockerfile`
 
 To change Airflow-side Python dependencies, edit `infra/airflow/requirements-airflow.txt`, then rebuild.
+
+Controlled infra/runtime pins in this pass (2026-04-09):
+- Airflow image: `apache/airflow:3.2.0-python3.11`
+- Postgres: `postgres:16.13-alpine` (major intentionally held at `16`)
+- Redis: `redis:7.4.8-alpine`
+- MinIO: `minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1`
+- ClickHouse: `clickhouse/clickhouse-server:26.3.5.12` (26.3 LTS line)
+- Qdrant: `qdrant/qdrant:v1.17.1`
+- Prometheus: `prom/prometheus:v3.11.1` (already on 3.11 line)
+- Grafana: `grafana/grafana:12.4.2`
+- Python client alignment: `qdrant-client==1.17.1` (repo + Airflow requirements)
 
 ## 3) Environment Files
 

@@ -96,6 +96,7 @@ make dev-down
 ```
 
 Airflow dependencies are now baked into a custom image (`infra/airflow/Dockerfile`) using pinned requirements (`infra/airflow/requirements-airflow.txt`).
+Qdrant client/server compatibility is pinned to `1.17.1` and retrieval/index query paths use `query_points` (not deprecated `search`).
 When those dependencies change, rebuild the Airflow image with:
 
 ```bash

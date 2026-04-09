@@ -619,12 +619,12 @@ def validate_generation(
         )
 
     sample_vector = points_src[0]["vector"]
-    sample_hits = client.search(
+    sample_hits = client.query_points(
         collection_name=collection_name,
-        query_vector=sample_vector,
+        query=sample_vector,
         limit=1,
         with_payload=True,
-    )
+    ).points
     if not sample_hits:
         raise ValueError(f"Sample query returned no hits for {collection_name}")
 

@@ -131,13 +131,13 @@ def _measure_query_latency_ms(
         )
 
         started = time.perf_counter()
-        hits = client.search(
+        hits = client.query_points(
             collection_name=collection_name,
-            query_vector=sample["vector"],
+            query=sample["vector"],
             query_filter=ann_filter,
             limit=top_k,
             with_payload=False,
-        )
+        ).points
         elapsed_ms = (time.perf_counter() - started) * 1000.0
         latencies_ms.append(elapsed_ms)
         total_hits += len(hits)
