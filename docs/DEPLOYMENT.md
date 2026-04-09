@@ -62,6 +62,19 @@ RBAC keys in env files:
 - `AE_ADMIN_API_KEYS`: comma-separated keys for admin/operator lifecycle + audit APIs.
 - If both are unset, protected API routes fail closed (health endpoint remains open).
 
+Connector-specific runtime settings in env files:
+- ClickHouse source connector:
+  - `CLICKHOUSE_HOST`, `CLICKHOUSE_PORT`, `CLICKHOUSE_DB`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD`
+  - `CLICKHOUSE_FEATURE_SLICE_QUERY`, `CLICKHOUSE_FEATURE_SLICE_LIMIT`
+- Postgres export-table connector:
+  - `EXPORT_POSTGRES_HOST`, `EXPORT_POSTGRES_PORT`, `EXPORT_POSTGRES_DB`
+  - `EXPORT_POSTGRES_USER`, `EXPORT_POSTGRES_PASSWORD`
+  - `EXPORT_POSTGRES_SCHEMA`, `EXPORT_POSTGRES_TABLE`, `EXPORT_POSTGRES_SSLMODE`
+  - Compose defaults use `EXPORT_POSTGRES_HOST=postgres`; host-run local scripts can override to `localhost`.
+
+Reference SQL for the ClickHouse source table contract:
+- `infra/clickhouse/sql/001_feature_mart_snapshot.sql`
+
 Operator control-plane runtime state:
 - Operator defaults file: `data/minimal_slice/control_plane/operator_state.json`
 - Run events log: `data/minimal_slice/control_plane/run_events.jsonl`

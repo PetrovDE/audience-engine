@@ -6,7 +6,12 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from prometheus_client import make_asgi_app
 from pydantic import BaseModel, Field
 
-from pipelines.minimal_slice import control_plane, lifecycle_service, run_flow
+from pipelines.minimal_slice import (
+    control_plane,
+    integrations,
+    lifecycle_service,
+    run_flow,
+)
 from pipelines.minimal_slice.config import SUMMARY_PATH
 from pipelines.minimal_slice.data_quality import DataQualityError
 from pipelines.minimal_slice.lifecycle_service import LifecycleActor
@@ -205,15 +210,14 @@ def list_integrations(
     principal: Principal = Depends(require_admin),
 ) -> dict:
     _ = principal
-    return {
-        "sources": control_plane.list_source_connectors(
-            include_planned=include_planned
-        ),
-        "exports": control_plane.list_export_targets(include_planned=include_planned),
-        "profiles": control_plane.list_integration_profiles(
-            include_planned=include_planned
-        ),
-    }
+    sources = control_plane.list_source_connectors(include_planned=include_planned)
+    exports = control_plane.list_export_targets(include_planned=include_planned)
+    profiles = control_plane.list_integration_profiles(include_planned=include_planned)
+    return integrations.annotate_runtime_readiness(
+        sources=sources,
+        exports=exports,
+        profiles=profiles,
+    )
 
 
 @app.get("/v1/admin/control-plane/policies")

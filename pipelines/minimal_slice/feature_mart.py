@@ -9,6 +9,7 @@ from .metrics import record_data_freshness
 from .storage import (
     minio_is_configured,
     read_feature_slice_from_clickhouse,
+    validate_clickhouse_source_config,
     write_feature_mart_parquet_to_minio,
 )
 
@@ -49,6 +50,33 @@ def _build_from_raw_rows(
 def _normalize_clickhouse_rows(
     rows: List[Dict[str, Any]], fs_version: str, allowed: List[str]
 ) -> List[Dict]:
+    if not rows:
+        raise ValueError(
+            "ClickHouse feature slice returned zero rows. "
+            "Check CLICKHOUSE_FEATURE_SLICE_QUERY and source table/view contents."
+        )
+
+    required_columns = [
+        "customer_id",
+        *allowed,
+        "is_employee_flag",
+        "do_not_contact_flag",
+        "opt_out_flag",
+        "legal_suppression_flag",
+        "region_code",
+        "segment_id",
+        "product_line",
+    ]
+    first_row = rows[0]
+    missing_columns = [
+        column for column in required_columns if column not in first_row
+    ]
+    if missing_columns:
+        raise ValueError(
+            "ClickHouse feature slice query is missing required columns: "
+            + ", ".join(sorted(missing_columns))
+        )
+
     normalized: List[Dict] = []
     for row in rows:
         normalized_row = {
@@ -57,8 +85,6 @@ def _normalize_clickhouse_rows(
             "policy_version": str(row.get("policy_version", POLICY_VERSION)),
         }
         for name in allowed:
-            if name not in row:
-                raise KeyError(f"ClickHouse row missing required feature: {name}")
             normalized_row[name] = row[name]
         normalized_row["is_employee_flag"] = bool(row.get("is_employee_flag", False))
         normalized_row["do_not_contact_flag"] = bool(
@@ -89,6 +115,9 @@ def build_feature_mart_snapshot(
     allowed = fs["features"]
     resolved_source = source_mode.lower()
     if resolved_source == "clickhouse":
+        config_errors = validate_clickhouse_source_config()
+        if config_errors:
+            raise ValueError("; ".join(config_errors))
         clickhouse_rows = read_feature_slice_from_clickhouse()
         snapshot_rows = _normalize_clickhouse_rows(clickhouse_rows, fs_version, allowed)
         record_data_freshness(dataset="clickhouse_feature_slice", latest_event_ts=None)

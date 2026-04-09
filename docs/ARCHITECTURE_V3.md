@@ -78,6 +78,9 @@ This section records implementation status against V3 constraints so architectur
 - A policy check step runs before export in the minimal vertical slice flow.
 - Governance registries and contracts exist under `governance/`.
 - Integration registry exists (`governance/integrations/integration_registry.yaml`) with implemented vs planned connector/profile status.
+- Real integration connectors are runtime-active for:
+  - source: `clickhouse_feature_slice` (query executes against ClickHouse)
+  - export: `postgres_export_table` (approved audience rows persisted to Postgres staging table)
 - API-first operator/admin control-plane endpoints exist in retrieval API (`/v1/admin/control-plane/*`, `/v1/admin/runs/*`).
 - Infra presence exists for Postgres, Redis, MinIO, ClickHouse, Qdrant, Airflow, Prometheus, and Grafana.
 - Airflow includes an explicit operator-facing DAG (`audience_engine_operator_main`) and a legacy internal compatibility DAG (`audience_engine_minimal_slice_e2e`).

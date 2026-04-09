@@ -15,8 +15,10 @@ def test_integration_registry_exposes_implemented_and_planned_connectors():
     assert any(row["source_id"] == "snapshot_jsonl" for row in sources)
     assert any(row["source_id"] == "crm_salesforce" for row in sources)
     assert any(row["export_id"] == "local_jsonl" for row in exports)
+    assert any(row["export_id"] == "postgres_export_table" for row in exports)
     assert any(row["export_id"] == "crm_salesforce_audience" for row in exports)
     assert any(row["profile_id"] == "local_snapshot_local_export" for row in profiles)
+    assert any(row["profile_id"] == "clickhouse_postgres_export" for row in profiles)
     assert any(row["profile_id"] == "salesforce_future_profile" for row in profiles)
 
 
@@ -42,12 +44,12 @@ def test_resolve_run_configuration_uses_defaults_and_request_override(
 
     resolved_request = control_plane.resolve_run_configuration(
         policy_version="policy_credit_v1",
-        integration_profile_id="clickhouse_minio_export",
+        integration_profile_id="clickhouse_postgres_export",
     )
     assert resolved_request.policy_selection_source == "request"
     assert resolved_request.integration_selection_source == "request"
     assert resolved_request.source_id == "clickhouse_feature_slice"
-    assert resolved_request.export_id == "minio_jsonl"
+    assert resolved_request.export_id == "postgres_export_table"
 
 
 def test_resolve_run_configuration_rejects_planned_profile(monkeypatch, tmp_path):

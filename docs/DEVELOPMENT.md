@@ -26,6 +26,9 @@ This will:
 - Retrieval/API RBAC is enabled via API keys in env:
   - `AE_CAMPAIGN_API_KEYS`
   - `AE_ADMIN_API_KEYS`
+- Integration MVP connector env settings:
+  - ClickHouse source: `CLICKHOUSE_*`, `CLICKHOUSE_FEATURE_SLICE_QUERY`, `CLICKHOUSE_FEATURE_SLICE_LIMIT`
+  - Postgres export table: `EXPORT_POSTGRES_*` (defaults can inherit from `POSTGRES_*`)
 
 ## Lint and Format
 ```bash
@@ -119,7 +122,7 @@ curl -H "X-AE-API-Key: admin_local_key" \
   http://localhost:8000/v1/admin/control-plane/integrations
 
 curl -X POST -H "X-AE-API-Key: admin_local_key" -H "Content-Type: application/json" \
-  -d '{"campaign_id":"camp_manual","policy_version":"policy_credit_v1","integration_profile_id":"local_snapshot_local_export","requested_size":20}' \
+  -d '{"campaign_id":"camp_manual","policy_version":"policy_credit_v1","integration_profile_id":"clickhouse_postgres_export","requested_size":20}' \
   http://localhost:8000/v1/admin/runs/trigger
 ```
 

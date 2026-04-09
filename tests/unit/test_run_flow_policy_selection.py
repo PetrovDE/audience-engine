@@ -157,10 +157,10 @@ def test_run_flow_binds_selected_policy_version_into_runtime(monkeypatch, tmp_pa
         }
 
     monkeypatch.setattr(run_flow, "evaluate_policy", _evaluate_policy)
-    monkeypatch.setattr(
-        run_flow.integrations,
-        "export_for_profile",
-        lambda **kwargs: {
+
+    def _export_for_profile(**kwargs):
+        captured["export_context"] = kwargs.get("export_context")
+        return {
             "target_id": "local_jsonl",
             "export_path": str(tmp_path / "approved_audience.jsonl"),
             "export_uri": None,
@@ -169,7 +169,10 @@ def test_run_flow_binds_selected_policy_version_into_runtime(monkeypatch, tmp_pa
             "source_id": "snapshot_jsonl",
             "export_id": "local_jsonl",
             "profile_status": "implemented",
-        },
+        }
+
+    monkeypatch.setattr(
+        run_flow.integrations, "export_for_profile", _export_for_profile
     )
     monkeypatch.setattr(run_flow, "_write_audit_to_postgres", lambda **kwargs: None)
     monkeypatch.setattr(run_flow, "SUMMARY_PATH", tmp_path / "summary.json")
@@ -182,3 +185,8 @@ def test_run_flow_binds_selected_policy_version_into_runtime(monkeypatch, tmp_pa
     assert captured["bundle_policy_version"] == selected_policy
     assert captured["policy_gate_policy_version"] == selected_policy
     assert summary["versions"]["policy_version"] == selected_policy
+    export_context = captured["export_context"]
+    assert isinstance(export_context, dict)
+    assert export_context["policy_version"] == selected_policy
+    assert export_context["run_id"] == bundle.run_id
+    assert export_context["index_generation"] == bundle.concrete_qdrant_collection

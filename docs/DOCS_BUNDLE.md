@@ -49,7 +49,7 @@ Canonical reference:
 - Embeddings: local JSONL (`embeddings.jsonl`) for index build.
 - Vector index: Qdrant collection(s) behind alias (`audience-serving` default).
 - Retrieval/policy intermediate data: in-memory pipeline payloads.
-- Export: local `approved_audience.jsonl` plus optional MinIO object upload.
+- Export: local `approved_audience.jsonl`, optional MinIO object upload, and managed Postgres staging export table (`audience_export_staging`).
 - Audit sink: Postgres append-only tables (`audience_run`, `audience_run_selected`, `audience_run_rejections_summary`).
 - Policy decision audit: Postgres append-only table (`policy_decision_audit`) with one row per evaluated customer.
 - Optional source/cache stores: ClickHouse (feature slice source), Redis (embedding cache).
@@ -69,12 +69,13 @@ Canonical references:
   - Required policy inputs in minimal slice: `blacklist`, `communication_history`.
   - Missing/unreadable/invalid required input triggers fail-closed rejection with reason code `POLICY_FAIL_CLOSED_REQUIRED_INPUT`.
 7. Export: approved audience rows are written to output.
+  - With `clickhouse_postgres_export`, approved rows are also persisted to Postgres staging table `audience_export_staging`.
 8. Audit: run summary plus Postgres append-only audit records are persisted.
 9. Explain/read: retrieval API exposes `GET /v1/policy/decisions/{run_id}/{customer_id}` from audit storage.
 
 Operational control selection during run:
 - Policy version is selected from operator defaults or per-run override.
-- Integration profile is selected from the integration registry (`governance/integrations/integration_registry.yaml`) and must be marked `implemented`.
+- Integration profile is selected from the integration registry (`governance/integrations/integration_registry.yaml`) and must be marked `implemented` and runtime-runnable by connector validation.
 - Run events are appended to `data/minimal_slice/control_plane/run_events.jsonl` for recent-run and failure visibility.
 
 Flow command:
@@ -103,6 +104,14 @@ SELECT run_id, campaign_id, run_ts, version_bundle->>'emb_version' AS emb_versio
 FROM audience_run
 ORDER BY run_ts DESC
 LIMIT 5;
+```
+
+Verify managed export staging rows (when using `clickhouse_postgres_export`):
+```sql
+SELECT run_id, campaign_id, customer_id, final_score, rank, policy_version, exported_ts
+FROM audience_export_staging
+ORDER BY exported_ts DESC
+LIMIT 20;
 ```
 
 Lifecycle operations now have a protected API surface:

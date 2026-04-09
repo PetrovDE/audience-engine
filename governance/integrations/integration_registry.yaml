@@ -1,7 +1,7 @@
 version: 1
 registry: integration_registry
 owner: platform-operations
-updated_at: 2026-04-08
+updated_at: 2026-04-09
 sources:
   - source_id: snapshot_jsonl
     display_name: Local Snapshot JSONL
@@ -20,13 +20,16 @@ sources:
     implementation_status: implemented
     supported_modes:
       - minimal_slice
-    description: Build feature mart from ClickHouse query configured via CLICKHOUSE_* env vars.
+    description: Read governed feature slice rows from ClickHouse using runtime query execution.
     config:
       source_mode: clickhouse
       required_env:
         - CLICKHOUSE_HOST
+        - CLICKHOUSE_PORT
         - CLICKHOUSE_DB
         - CLICKHOUSE_USER
+        - CLICKHOUSE_PASSWORD
+        - CLICKHOUSE_FEATURE_SLICE_QUERY
 
   - source_id: crm_salesforce
     display_name: Salesforce CRM
@@ -82,6 +85,23 @@ exports:
         - MINIO_SECRET_KEY
         - MINIO_BUCKET
 
+  - export_id: postgres_export_table
+    display_name: Postgres Export Staging Table
+    kind: export
+    implementation_status: implemented
+    description: Write approved audience rows into managed Postgres staging table for downstream CRM/ACRM consumption.
+    config:
+      write_local_file: true
+      write_postgres_table: true
+      required_env:
+        - EXPORT_POSTGRES_HOST
+        - EXPORT_POSTGRES_PORT
+        - EXPORT_POSTGRES_DB
+        - EXPORT_POSTGRES_USER
+        - EXPORT_POSTGRES_PASSWORD
+        - EXPORT_POSTGRES_SCHEMA
+        - EXPORT_POSTGRES_TABLE
+
   - export_id: crm_salesforce_audience
     display_name: Salesforce Audience Push
     kind: export
@@ -109,6 +129,19 @@ profiles:
     implementation_status: implemented
     source_id: clickhouse_feature_slice
     export_id: minio_jsonl
+    field_mapping:
+      customer_key: customer_id
+      score_key: score
+      segmentation_keys:
+        - product_line
+        - region_code
+        - segment_id
+
+  - profile_id: clickhouse_postgres_export
+    display_name: ClickHouse to Postgres Export Staging
+    implementation_status: implemented
+    source_id: clickhouse_feature_slice
+    export_id: postgres_export_table
     field_mapping:
       customer_key: customer_id
       score_key: score

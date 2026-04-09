@@ -30,6 +30,10 @@ It clarifies the single operator workflow, the integration setup model, and runt
 - `GET /v1/admin/index/*` lifecycle endpoints
 - `GET /v1/policy/decisions/{run_id}/{customer_id}`
 
+`GET /v1/admin/control-plane/integrations` includes runtime readiness fields:
+- `runtime_runnable`
+- `runtime_validation_errors`
+
 ### System-internal surfaces
 - `pipelines.minimal_slice.run_flow.run_minimal_vertical_slice`
 - `pipelines.minimal_slice.lifecycle_service`
@@ -56,6 +60,7 @@ Runtime abstraction modules:
 ### Implemented export targets
 - `local_jsonl`: local approved audience file.
 - `minio_jsonl`: local file + MinIO upload.
+- `postgres_export_table`: local approved audience file + managed Postgres staging table writes.
 
 ### Planned export targets (not implemented)
 - `crm_salesforce_audience`
@@ -63,6 +68,7 @@ Runtime abstraction modules:
 ### Integration profiles
 - `local_snapshot_local_export` (implemented)
 - `clickhouse_minio_export` (implemented)
+- `clickhouse_postgres_export` (implemented, integration MVP baseline)
 - `salesforce_future_profile` (planned)
 
 Only `implemented` profiles/connectors can be selected for runtime execution.
@@ -93,7 +99,7 @@ Latest summary:
 - `data/minimal_slice/run/run_summary.json`
 
 Durable run lineage:
-- Postgres `audience_run`, `audience_run_selected`, `audience_run_rejections_summary`, `policy_decision_audit`
+- Postgres `audience_run`, `audience_run_selected`, `audience_run_rejections_summary`, `policy_decision_audit`, `audience_export_staging`
 
 ## Standard Operator Workflow
 1. Inspect control model and defaults (`/v1/admin/control-plane/model`, `/v1/admin/control-plane/defaults`).

@@ -278,14 +278,30 @@ def task_export_and_audit() -> dict[str, Any]:
             row for row in policy_result["results"] if row.get("selected", False)
         ],
     }
+    run_ts = datetime.now(timezone.utc).isoformat()
+    export_context = {
+        "run_id": bundle.run_id,
+        "campaign_id": bundle.campaign_id,
+        "policy_version": bundle.policy_version,
+        "fs_version": bundle.fs_version,
+        "emb_version": bundle.emb_version,
+        "model_version": bundle.model_version,
+        "index_alias": bundle.index_alias,
+        "index_generation": index_meta["collection"],
+        "integration_profile_id": op_ctx["integration_profile_id"],
+        "source_id": op_ctx["source_id"],
+        "export_id": op_ctx["export_id"],
+        "channel": "email",
+        "exported_ts": run_ts,
+    }
     export_result = integrations.export_for_profile(
         profile_id=op_ctx["integration_profile_id"],
         policy_result=export_ready,
         run_id=bundle.run_id,
         output_path=ROOT / "data" / "minimal_slice" / "run" / "approved_audience.jsonl",
+        export_context=export_context,
     )
 
-    run_ts = datetime.now(timezone.utc).isoformat()
     run_row, selected_rows, rejection_rows, decision_rows = _build_audit_rows(
         retrieved=retrieved,
         policy_result=policy_result,

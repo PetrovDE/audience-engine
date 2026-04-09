@@ -476,19 +476,35 @@ def run_minimal_vertical_slice(
             campaign_id=bundle.campaign_id,
             requested_size=requested_size,
         )
+        run_ts = datetime.now(timezone.utc).isoformat()
         export_ready = {
             **policy_result,
             "results": [
                 row for row in policy_result["results"] if row.get("selected", False)
             ],
         }
+        export_context = {
+            "run_id": bundle.run_id,
+            "campaign_id": bundle.campaign_id,
+            "policy_version": bundle.policy_version,
+            "fs_version": bundle.fs_version,
+            "emb_version": bundle.emb_version,
+            "model_version": bundle.model_version,
+            "index_alias": bundle.index_alias,
+            "index_generation": index_meta["collection"],
+            "integration_profile_id": run_config.integration_profile_id,
+            "source_id": run_config.source_id,
+            "export_id": run_config.export_id,
+            "channel": "email",
+            "exported_ts": run_ts,
+        }
         export_result = integrations.export_for_profile(
             profile_id=run_config.integration_profile_id,
             policy_result=export_ready,
             run_id=bundle.run_id,
             output_path=EXPORT_PATH,
+            export_context=export_context,
         )
-        run_ts = datetime.now(timezone.utc).isoformat()
         run_row, selected_rows, rejection_rows, decision_rows = _build_audit_rows(
             retrieved=retrieved,
             policy_result=policy_result,

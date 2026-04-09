@@ -62,6 +62,30 @@ Primary key: (`run_id`, `reason_code`)
 
 Uniqueness: (`run_id`, `customer_id`)
 
+### `audience_export_staging`
+- `id` (BIGSERIAL, PK)
+- `run_id` (UUID, FK -> `audience_run.run_id`)
+- `campaign_id` (TEXT)
+- `customer_id` (TEXT)
+- `status` (TEXT, currently `approve`)
+- `final_score` (DOUBLE PRECISION)
+- `rank` (INTEGER)
+- `channel` (TEXT)
+- `policy_version` (TEXT)
+- `fs_version` (TEXT)
+- `emb_version` (TEXT)
+- `model_version` (TEXT)
+- `index_alias` (TEXT)
+- `index_generation` (TEXT)
+- `integration_profile_id` (TEXT)
+- `source_id` (TEXT)
+- `export_target_id` (TEXT)
+- `exported_ts` (TIMESTAMPTZ)
+- `export_context` (JSONB)
+- `created_at` (TIMESTAMPTZ, default `now()`)
+
+Uniqueness: (`run_id`, `customer_id`)
+
 ### `index_lifecycle_audit`
 - `id` (BIGSERIAL, PK)
 - `action` (TEXT, `validate_generation|promote_alias|rollback_alias`)
@@ -85,6 +109,8 @@ All audit tables block `UPDATE` and `DELETE` via trigger `forbid_audience_audit_
 - Migration script: `infra/postgres/migrations/003_policy_decision_audit.sql`
 - Init script: `infra/postgres/init/004_index_lifecycle_audit.sql`
 - Migration script: `infra/postgres/migrations/004_index_lifecycle_audit.sql`
+- Init script: `infra/postgres/init/005_export_staging.sql`
+- Migration script: `infra/postgres/migrations/005_export_staging.sql`
 
 ## Minimal Slice Runtime Behavior
 `pipelines/minimal_slice/run_flow.py` writes:
@@ -92,6 +118,7 @@ All audit tables block `UPDATE` and `DELETE` via trigger `forbid_audience_audit_
 2. one `audience_run_selected` row per approved customer,
 3. one `audience_run_rejections_summary` row per rejection reason code.
 4. one `policy_decision_audit` row per evaluated customer decision.
+5. when the `postgres_export_table` target is selected, one `audience_export_staging` row per approved customer.
 
 Operational control-plane run history is also appended to:
 - `data/minimal_slice/control_plane/run_events.jsonl`
@@ -130,5 +157,12 @@ LIMIT 20;
 SELECT action, alias_name, target_collection_name, actor_role, actor_id, outcome, action_ts
 FROM index_lifecycle_audit
 ORDER BY action_ts DESC
+LIMIT 20;
+```
+
+```sql
+SELECT run_id, campaign_id, customer_id, final_score, rank, policy_version, exported_ts
+FROM audience_export_staging
+ORDER BY exported_ts DESC
 LIMIT 20;
 ```

@@ -139,21 +139,55 @@ def upload_export_to_minio(*, export_path: Path, run_id: str) -> str:
 
 
 def read_feature_slice_from_clickhouse() -> list[dict[str, Any]]:
-    clickhouse_connect = _safe_import_clickhouse()
-    client = clickhouse_connect.get_client(
-        host=config.CLICKHOUSE_HOST,
-        port=config.CLICKHOUSE_PORT,
-        username=config.CLICKHOUSE_USER,
-        password=config.CLICKHOUSE_PASSWORD,
-        database=config.CLICKHOUSE_DB,
-    )
+    config_errors = validate_clickhouse_source_config()
+    if config_errors:
+        raise ValueError("; ".join(config_errors))
 
+    clickhouse_connect = _safe_import_clickhouse()
     query = config.CLICKHOUSE_FEATURE_SLICE_QUERY.strip()
     if config.CLICKHOUSE_FEATURE_SLICE_LIMIT > 0 and "limit" not in query.lower():
         query = f"{query}\nLIMIT {config.CLICKHOUSE_FEATURE_SLICE_LIMIT}"
 
-    result = client.query(query)
-    return [dict(zip(result.column_names, row)) for row in result.result_rows]
+    try:
+        client = clickhouse_connect.get_client(
+            host=config.CLICKHOUSE_HOST,
+            port=config.CLICKHOUSE_PORT,
+            username=config.CLICKHOUSE_USER,
+            password=config.CLICKHOUSE_PASSWORD,
+            database=config.CLICKHOUSE_DB,
+        )
+        result = client.query(query)
+        return [dict(zip(result.column_names, row)) for row in result.result_rows]
+    except Exception as exc:
+        raise RuntimeError(
+            "ClickHouse source connector failed to execute feature-slice query "
+            f"against host={config.CLICKHOUSE_HOST!r}, "
+            f"db={config.CLICKHOUSE_DB!r}, user={config.CLICKHOUSE_USER!r}: {exc}"
+        ) from exc
+
+
+def validate_clickhouse_source_config() -> list[str]:
+    errors: list[str] = []
+    if not str(config.CLICKHOUSE_HOST).strip():
+        errors.append("CLICKHOUSE_HOST is required for clickhouse_feature_slice source")
+    try:
+        if int(config.CLICKHOUSE_PORT) <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        errors.append(
+            "CLICKHOUSE_PORT must be a positive integer "
+            "for clickhouse_feature_slice source"
+        )
+    if not str(config.CLICKHOUSE_DB).strip():
+        errors.append("CLICKHOUSE_DB is required for clickhouse_feature_slice source")
+    if not str(config.CLICKHOUSE_USER).strip():
+        errors.append("CLICKHOUSE_USER is required for clickhouse_feature_slice source")
+    if not str(config.CLICKHOUSE_FEATURE_SLICE_QUERY).strip():
+        errors.append(
+            "CLICKHOUSE_FEATURE_SLICE_QUERY is required "
+            "for clickhouse_feature_slice source"
+        )
+    return errors
 
 
 def _redis_client():

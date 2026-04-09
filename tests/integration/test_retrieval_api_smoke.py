@@ -195,14 +195,15 @@ def test_control_plane_defaults_get_update_smoke(monkeypatch):
     )
     put_resp = client.put(
         "/v1/admin/control-plane/defaults",
-        json={"default_integration_profile_id": "clickhouse_minio_export"},
+        json={"default_integration_profile_id": "clickhouse_postgres_export"},
         headers=_headers(ADMIN_KEY),
     )
     assert get_resp.status_code == 200
     assert get_resp.json()["default_policy_version"] == "policy_credit_v1"
     assert put_resp.status_code == 200
     assert (
-        put_resp.json()["default_integration_profile_id"] == "clickhouse_minio_export"
+        put_resp.json()["default_integration_profile_id"]
+        == "clickhouse_postgres_export"
     )
 
 
@@ -242,6 +243,20 @@ def test_control_plane_integrations_policies_and_runs_smoke(monkeypatch):
         app_module.control_plane,
         "list_integration_profiles",
         lambda include_planned=True: [{"profile_id": "local_snapshot_local_export"}],
+    )
+    monkeypatch.setattr(
+        app_module.integrations,
+        "annotate_runtime_readiness",
+        lambda sources, exports, profiles: {
+            "sources": [{"source_id": "snapshot_jsonl", "runtime_runnable": True}],
+            "exports": [{"export_id": "local_jsonl", "runtime_runnable": True}],
+            "profiles": [
+                {
+                    "profile_id": "local_snapshot_local_export",
+                    "runtime_runnable": True,
+                }
+            ],
+        },
     )
     monkeypatch.setattr(
         app_module.control_plane,
@@ -284,6 +299,7 @@ def test_control_plane_integrations_policies_and_runs_smoke(monkeypatch):
     )
     assert integrations_resp.status_code == 200
     assert integrations_resp.json()["sources"][0]["source_id"] == "snapshot_jsonl"
+    assert integrations_resp.json()["profiles"][0]["runtime_runnable"] is True
     assert policies_resp.status_code == 200
     assert policies_resp.json()["default_policy_version"] == "policy_credit_v1"
     assert runs_resp.status_code == 200
