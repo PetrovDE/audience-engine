@@ -166,6 +166,37 @@ def read_feature_slice_from_clickhouse() -> list[dict[str, Any]]:
         ) from exc
 
 
+def probe_clickhouse_source_connectivity() -> None:
+    config_errors = validate_clickhouse_source_config()
+    if config_errors:
+        raise ValueError("; ".join(config_errors))
+
+    clickhouse_connect = _safe_import_clickhouse()
+    client_kwargs = {
+        "host": config.CLICKHOUSE_HOST,
+        "port": config.CLICKHOUSE_PORT,
+        "username": config.CLICKHOUSE_USER,
+        "password": config.CLICKHOUSE_PASSWORD,
+        "database": config.CLICKHOUSE_DB,
+        "connect_timeout": config.INTEGRATION_READINESS_PROBE_TIMEOUT_SECONDS,
+        "send_receive_timeout": config.INTEGRATION_READINESS_PROBE_TIMEOUT_SECONDS,
+    }
+    try:
+        try:
+            client = clickhouse_connect.get_client(**client_kwargs)
+        except TypeError:
+            client_kwargs.pop("connect_timeout", None)
+            client_kwargs.pop("send_receive_timeout", None)
+            client = clickhouse_connect.get_client(**client_kwargs)
+        client.query("SELECT 1")
+    except Exception as exc:
+        raise RuntimeError(
+            "ClickHouse source connector connectivity probe failed against "
+            f"host={config.CLICKHOUSE_HOST!r}, db={config.CLICKHOUSE_DB!r}, "
+            f"user={config.CLICKHOUSE_USER!r}: {exc}"
+        ) from exc
+
+
 def validate_clickhouse_source_config() -> list[str]:
     errors: list[str] = []
     if not str(config.CLICKHOUSE_HOST).strip():
@@ -237,3 +268,19 @@ def minio_is_configured() -> bool:
         and config.MINIO_SECRET_KEY
         and config.MINIO_BUCKET
     )
+
+
+def probe_minio_connectivity() -> None:
+    if not minio_is_configured():
+        raise ValueError(
+            "MinIO connectivity probe requires "
+            "MINIO endpoint/access/bucket configuration"
+        )
+    try:
+        client = _minio_client()
+        client.bucket_exists(config.MINIO_BUCKET)
+    except Exception as exc:
+        raise RuntimeError(
+            "MinIO connectivity probe failed against "
+            f"endpoint={config.MINIO_ENDPOINT!r}, bucket={config.MINIO_BUCKET!r}: {exc}"
+        ) from exc

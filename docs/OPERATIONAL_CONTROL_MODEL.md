@@ -33,6 +33,14 @@ It clarifies the single operator workflow, the integration setup model, and runt
 `GET /v1/admin/control-plane/integrations` includes runtime readiness fields:
 - `runtime_runnable`
 - `runtime_validation_errors`
+- `runtime_readiness_mode` (`config_only` or `config_and_connectivity`)
+- `runtime_config_valid`
+- `runtime_connectivity_checked`
+- `runtime_connectivity_valid`
+
+Readiness semantics:
+- `runtime_runnable=true` means config validation passed and, for connectors with `runtime_readiness_mode=config_and_connectivity`, a live lightweight connectivity probe also succeeded.
+- `runtime_runnable=true` with `runtime_readiness_mode=config_only` means only config-shape validation applies (no network probe needed for that connector class).
 
 ### System-internal surfaces
 - `pipelines.minimal_slice.run_flow.run_minimal_vertical_slice`

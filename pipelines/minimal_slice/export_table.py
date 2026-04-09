@@ -73,6 +73,7 @@ def _postgres_conninfo() -> str:
         f"dbname={db}",
         f"user={user}",
         f"password={password}",
+        "connect_timeout=2",
     ]
     sslmode = EXPORT_POSTGRES_SSLMODE.strip()
     if sslmode:
@@ -115,6 +116,30 @@ def validate_postgres_export_table_config() -> list[str]:
             "for Postgres export-table connector"
         )
     return errors
+
+
+def probe_postgres_export_table_connectivity() -> None:
+    config_errors = validate_postgres_export_table_config()
+    if config_errors:
+        raise ValueError("; ".join(config_errors))
+
+    schema_name = _validate_identifier(
+        EXPORT_POSTGRES_SCHEMA, field="EXPORT_POSTGRES_SCHEMA"
+    )
+    table_name = _validate_identifier(
+        EXPORT_POSTGRES_TABLE, field="EXPORT_POSTGRES_TABLE"
+    )
+    probe_sql = f"SELECT 1 FROM {schema_name}.{table_name} LIMIT 1"
+    try:
+        with _psycopg().connect(_postgres_conninfo()) as conn:
+            with conn.cursor() as cur:
+                cur.execute(probe_sql)
+    except Exception as exc:
+        raise RuntimeError(
+            "Postgres export-table connector connectivity probe failed against "
+            f"host={EXPORT_POSTGRES_HOST!r}, db={EXPORT_POSTGRES_DB!r}, "
+            f"table={schema_name}.{table_name}: {exc}"
+        ) from exc
 
 
 def _require_export_context(export_context: dict[str, Any]) -> dict[str, Any]:
@@ -189,7 +214,9 @@ def write_approved_to_postgres_export_table(
     approved = _approved_rows(policy_result)
     if not approved:
         return {
+            "rows_attempted": 0,
             "rows_written": 0,
+            "rows_skipped_conflict": 0,
             "table": f"{schema_name}.{table_name}",
             "status": "no_rows",
         }
@@ -255,13 +282,20 @@ def write_approved_to_postgres_export_table(
         ON CONFLICT (run_id, customer_id) DO NOTHING
     """
 
+    rows_attempted = len(insert_rows)
+    rows_written = 0
     with _psycopg().connect(_postgres_conninfo()) as conn:
         with conn.cursor() as cur:
-            cur.executemany(insert_sql, insert_rows)
+            for row in insert_rows:
+                cur.execute(insert_sql, row)
+                rows_written += max(int(cur.rowcount or 0), 0)
         conn.commit()
+    rows_skipped_conflict = max(rows_attempted - rows_written, 0)
 
     return {
-        "rows_written": len(insert_rows),
+        "rows_attempted": rows_attempted,
+        "rows_written": rows_written,
+        "rows_skipped_conflict": rows_skipped_conflict,
         "table": f"{schema_name}.{table_name}",
         "status": "written",
     }

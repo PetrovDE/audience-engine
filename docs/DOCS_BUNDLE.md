@@ -70,12 +70,22 @@ Canonical references:
   - Missing/unreadable/invalid required input triggers fail-closed rejection with reason code `POLICY_FAIL_CLOSED_REQUIRED_INPUT`.
 7. Export: approved audience rows are written to output.
   - With `clickhouse_postgres_export`, approved rows are also persisted to Postgres staging table `audience_export_staging`.
+  - Export metadata reports conflict-aware counts:
+    - `rows_attempted`
+    - `rows_written` (actual inserts)
+    - `rows_skipped_conflict` (idempotent duplicate skips)
 8. Audit: run summary plus Postgres append-only audit records are persisted.
 9. Explain/read: retrieval API exposes `GET /v1/policy/decisions/{run_id}/{customer_id}` from audit storage.
 
 Operational control selection during run:
 - Policy version is selected from operator defaults or per-run override.
-- Integration profile is selected from the integration registry (`governance/integrations/integration_registry.yaml`) and must be marked `implemented` and runtime-runnable by connector validation.
+- Integration profile is selected from the integration registry (`governance/integrations/integration_registry.yaml`) and must be marked `implemented` and runtime-runnable.
+  - Runtime readiness is explicit in control-plane API fields:
+    - `runtime_readiness_mode`
+    - `runtime_config_valid`
+    - `runtime_connectivity_checked`
+    - `runtime_connectivity_valid`
+  - `runtime_runnable=true` means config is valid and, when `runtime_readiness_mode=config_and_connectivity`, connectivity probing also succeeded.
 - Run events are appended to `data/minimal_slice/control_plane/run_events.jsonl` for recent-run and failure visibility.
 
 Flow command:

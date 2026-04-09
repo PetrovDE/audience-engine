@@ -7,15 +7,21 @@ def test_write_approved_to_postgres_export_table_writes_contract_rows(monkeypatc
     captured: dict[str, object] = {}
 
     class _FakeCursor:
+        def __init__(self):
+            self.rowcount = 0
+
         def __enter__(self):
             return self
 
         def __exit__(self, exc_type, exc, tb):
             return False
 
-        def executemany(self, query, rows):
+        def execute(self, query, row):
             captured["query"] = query
-            captured["rows"] = list(rows)
+            rows = captured.setdefault("rows", [])
+            assert isinstance(rows, list)
+            rows.append(row)
+            self.rowcount = 1
 
     class _FakeConnection:
         def __enter__(self):
@@ -91,7 +97,9 @@ def test_write_approved_to_postgres_export_table_writes_contract_rows(monkeypatc
         export_context=export_context,
     )
 
+    assert meta["rows_attempted"] == 2
     assert meta["rows_written"] == 2
+    assert meta["rows_skipped_conflict"] == 0
     assert meta["table"] == "public.audience_export_staging"
     assert meta["status"] == "written"
     assert "INSERT INTO public.audience_export_staging" in str(captured["query"])
@@ -122,3 +130,144 @@ def test_write_approved_to_postgres_export_table_requires_run_id():
         assert "export_context fields: run_id" in str(exc)
     else:  # pragma: no cover
         raise AssertionError("Expected ValueError for missing run_id")
+
+
+def test_write_approved_to_postgres_export_table_reports_conflict_counts(monkeypatch):
+    seen_keys: set[tuple[str, str]] = set()
+
+    class _FakeCursor:
+        def __init__(self):
+            self.rowcount = 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, query, row):
+            run_id = str(row[0])
+            customer_id = str(row[2])
+            key = (run_id, customer_id)
+            if key in seen_keys:
+                self.rowcount = 0
+            else:
+                seen_keys.add(key)
+                self.rowcount = 1
+
+    class _FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def cursor(self):
+            return _FakeCursor()
+
+        def commit(self):
+            return None
+
+    class _FakePsycopg:
+        @staticmethod
+        def connect(conninfo):
+            return _FakeConnection()
+
+    monkeypatch.setattr(export_table, "_psycopg", lambda: _FakePsycopg())
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_HOST", "localhost")
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_PORT", 5432)
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_DB", "audience_engine")
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_USER", "audience_engine")
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_PASSWORD", "secret")
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_SCHEMA", "public")
+    monkeypatch.setattr(
+        export_table, "EXPORT_POSTGRES_TABLE", "audience_export_staging"
+    )
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_SSLMODE", "")
+
+    policy_result = {
+        "results": [
+            {"customer_id": "cust_001", "decision": "approve", "score": 0.99},
+            {"customer_id": "cust_003", "decision": "approve", "score": 0.77},
+        ]
+    }
+    export_context = {
+        "run_id": "7bf0c5be-f95c-4827-a5c4-6ee71f2807f2",
+        "campaign_id": "camp_export",
+        "policy_version": "policy_credit_v1",
+        "fs_version": "fs_credit_v1",
+        "emb_version": "fs_credit_v1+prompt_credit_v1+nomic-embed-text",
+        "model_version": "nomic-embed-text",
+        "index_alias": "audience-serving",
+        "index_generation": "customers_fs_credit_v1_8d_20260409000000",
+        "integration_profile_id": "clickhouse_postgres_export",
+        "source_id": "clickhouse_feature_slice",
+        "export_id": "postgres_export_table",
+        "channel": "email",
+        "exported_ts": "2026-04-09T12:34:56+00:00",
+    }
+
+    first = export_table.write_approved_to_postgres_export_table(
+        policy_result=policy_result,
+        export_context=export_context,
+    )
+    second = export_table.write_approved_to_postgres_export_table(
+        policy_result=policy_result,
+        export_context=export_context,
+    )
+
+    assert first["rows_attempted"] == 2
+    assert first["rows_written"] == 2
+    assert first["rows_skipped_conflict"] == 0
+    assert second["rows_attempted"] == 2
+    assert second["rows_written"] == 0
+    assert second["rows_skipped_conflict"] == 2
+
+
+def test_probe_postgres_export_table_connectivity_executes_select(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class _FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, query, params=None):
+            captured["query"] = query
+
+    class _FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def cursor(self):
+            return _FakeCursor()
+
+    class _FakePsycopg:
+        @staticmethod
+        def connect(conninfo):
+            captured["conninfo"] = conninfo
+            return _FakeConnection()
+
+    monkeypatch.setattr(export_table, "_psycopg", lambda: _FakePsycopg())
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_HOST", "localhost")
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_PORT", 5432)
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_DB", "audience_engine")
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_USER", "audience_engine")
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_PASSWORD", "secret")
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_SCHEMA", "public")
+    monkeypatch.setattr(
+        export_table, "EXPORT_POSTGRES_TABLE", "audience_export_staging"
+    )
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_SSLMODE", "")
+
+    export_table.probe_postgres_export_table_connectivity()
+
+    assert "SELECT 1 FROM public.audience_export_staging LIMIT 1" in str(
+        captured["query"]
+    )
+    assert "connect_timeout=2" in str(captured["conninfo"])

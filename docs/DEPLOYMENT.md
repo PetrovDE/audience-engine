@@ -71,6 +71,9 @@ Connector-specific runtime settings in env files:
   - `EXPORT_POSTGRES_USER`, `EXPORT_POSTGRES_PASSWORD`
   - `EXPORT_POSTGRES_SCHEMA`, `EXPORT_POSTGRES_TABLE`, `EXPORT_POSTGRES_SSLMODE`
   - Compose defaults use `EXPORT_POSTGRES_HOST=postgres`; host-run local scripts can override to `localhost`.
+- Runtime readiness probe timeout:
+  - `INTEGRATION_READINESS_PROBE_TIMEOUT_SECONDS` (default `2.0`)
+  - Used by control-plane runtime readiness checks for connectivity-probed connectors.
 
 Reference SQL for the ClickHouse source table contract:
 - `infra/clickhouse/sql/001_feature_mart_snapshot.sql`

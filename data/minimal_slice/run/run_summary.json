@@ -1,15 +1,15 @@
 {
-  "run_ts": "2026-04-08T18:21:47.389387+00:00",
+  "run_ts": "2026-04-09T13:03:24.562351+00:00",
   "status": "ok",
   "operations": {
     "policy_version": "policy_credit_v1",
-    "policy_selection_source": "operator_default",
-    "integration_profile_id": "local_snapshot_local_export",
-    "integration_selection_source": "operator_default",
-    "source_id": "snapshot_jsonl",
-    "export_id": "local_jsonl",
-    "requested_size": 20,
-    "profile_id": "local_snapshot_local_export",
+    "policy_selection_source": "request",
+    "integration_profile_id": "clickhouse_postgres_export",
+    "integration_selection_source": "request",
+    "source_id": "clickhouse_feature_slice",
+    "export_id": "postgres_export_table",
+    "requested_size": 3,
+    "profile_id": "clickhouse_postgres_export",
     "implementation_status": "implemented"
   },
   "versions": {
@@ -18,9 +18,9 @@
     "model_version": "nomic-embed-text",
     "policy_version": "policy_credit_v1",
     "index_alias": "audience-serving",
-    "concrete_qdrant_collection": "audience-serving-fake",
-    "run_id": "5618c7f0-3685-42ee-a4cd-fa7e167539b6",
-    "campaign_id": "camp_fail_closed_e2e"
+    "concrete_qdrant_collection": "audience-serving-fs_credit_v1-5f840c74",
+    "run_id": "5f840c74-dab2-41a3-aa1b-9ad3f6c8cce9",
+    "campaign_id": "camp_clickhouse_postgres_e2e"
   },
   "inputs": {
     "raw_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\synthetic_customers.jsonl",
@@ -49,7 +49,7 @@
         "dataset": "feature_mart",
         "path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\feature_mart_snapshot.jsonl",
         "contract": "D:\\AudienceEngine\\governance\\contracts\\feature_mart.yaml",
-        "record_count": 200,
+        "record_count": 5,
         "required_fields_checked": [
           "customer_id",
           "fs_version",
@@ -72,7 +72,7 @@
         "status": "passed",
         "dataset": "embeddings",
         "path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\embeddings.jsonl",
-        "record_count": 200,
+        "record_count": 5,
         "vector_size": 8,
         "emb_version": "fs_credit_v1+prompt_credit_v1+nomic-embed-text"
       }
@@ -81,42 +81,45 @@
   "index": {
     "stage": "promote_alias",
     "alias": "audience-serving",
-    "collection": "audience-serving-fake"
+    "collection": "audience-serving-fs_credit_v1-5f840c74",
+    "previous_collection": "audience-serving-fs_credit_v1-4b423569"
   },
   "retrieval": {
     "query_customer_id": "cust_00000",
-    "retrieved_count": 2
+    "retrieved_count": 5
   },
   "policy": {
-    "status": "failed_closed",
-    "fail_closed": true,
-    "total_candidates": 2,
-    "approved_count": 0,
-    "rejected_count": 2,
-    "reject_reason_counts": {
-      "POLICY_FAIL_CLOSED_REQUIRED_INPUT": 2
-    },
-    "requested_size": 20,
-    "selected_count": 0
+    "status": "ok",
+    "fail_closed": false,
+    "total_candidates": 5,
+    "approved_count": 5,
+    "rejected_count": 0,
+    "reject_reason_counts": {},
+    "requested_size": 3,
+    "selected_count": 3
   },
   "export_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\approved_audience.jsonl",
   "export_minio_uri": null,
   "export": {
-    "target_id": "local_jsonl",
+    "target_id": "postgres_export_table",
     "export_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\approved_audience.jsonl",
     "export_uri": null,
-    "status": "written",
-    "profile_id": "local_snapshot_local_export",
-    "source_id": "snapshot_jsonl",
-    "export_id": "local_jsonl",
+    "status": "written_and_persisted",
+    "postgres_table": "public.audience_export_staging",
+    "rows_attempted": 3,
+    "rows_written": 3,
+    "rows_skipped_conflict": 0,
+    "profile_id": "clickhouse_postgres_export",
+    "source_id": "clickhouse_feature_slice",
+    "export_id": "postgres_export_table",
     "profile_status": "implemented"
   },
   "audit": {
     "postgres": {
       "run_table": "audience_run",
-      "selected_rows_written": 0,
-      "rejection_summary_rows_written": 1,
-      "policy_decision_rows_written": 2
+      "selected_rows_written": 3,
+      "rejection_summary_rows_written": 0,
+      "policy_decision_rows_written": 5
     }
   }
 }

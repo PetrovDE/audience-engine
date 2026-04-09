@@ -100,3 +100,39 @@ def test_clickhouse_feature_mart_requires_contract_columns(monkeypatch, tmp_path
             output_path=tmp_path / "feature_mart.jsonl",
             source_mode="clickhouse",
         )
+
+
+def test_probe_clickhouse_source_connectivity_executes_select_1(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class _FakeClient:
+        def query(self, query: str):
+            captured["probe_query"] = query
+            return object()
+
+    class _FakeModule:
+        @staticmethod
+        def get_client(**kwargs):
+            captured["client_kwargs"] = kwargs
+            return _FakeClient()
+
+    monkeypatch.setattr(storage, "_safe_import_clickhouse", lambda: _FakeModule())
+    monkeypatch.setattr(storage.config, "CLICKHOUSE_HOST", "clickhouse.local")
+    monkeypatch.setattr(storage.config, "CLICKHOUSE_PORT", 8123)
+    monkeypatch.setattr(storage.config, "CLICKHOUSE_DB", "audience_engine")
+    monkeypatch.setattr(storage.config, "CLICKHOUSE_USER", "audience_engine")
+    monkeypatch.setattr(storage.config, "CLICKHOUSE_PASSWORD", "secret")
+    monkeypatch.setattr(
+        storage.config,
+        "CLICKHOUSE_FEATURE_SLICE_QUERY",
+        "SELECT customer_id FROM feature_mart_snapshot",
+    )
+    monkeypatch.setattr(
+        storage.config, "INTEGRATION_READINESS_PROBE_TIMEOUT_SECONDS", 1.5
+    )
+
+    storage.probe_clickhouse_source_connectivity()
+
+    assert captured["probe_query"] == "SELECT 1"
+    assert captured["client_kwargs"]["host"] == "clickhouse.local"
+    assert captured["client_kwargs"]["connect_timeout"] == 1.5

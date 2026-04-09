@@ -7,6 +7,7 @@ from typing import Any, Protocol
 from .config import EXPORT_PATH, FEATURE_MART_PATH
 from .control_plane import get_integration_profile
 from .export_table import (
+    probe_postgres_export_table_connectivity,
     validate_postgres_export_table_config,
     write_approved_to_postgres_export_table,
 )
@@ -14,6 +15,8 @@ from .exporter import export_approved
 from .feature_mart import build_feature_mart_snapshot
 from .storage import (
     minio_is_configured,
+    probe_clickhouse_source_connectivity,
+    probe_minio_connectivity,
     upload_export_to_minio,
     validate_clickhouse_source_config,
 )
@@ -21,8 +24,10 @@ from .storage import (
 
 class SourceConnector(Protocol):
     connector_id: str
+    runtime_readiness_mode: str
 
     def validate_config(self) -> None: ...
+    def probe_connectivity(self) -> None: ...
 
     def build_feature_mart(
         self,
@@ -35,8 +40,10 @@ class SourceConnector(Protocol):
 
 class ExportTarget(Protocol):
     target_id: str
+    runtime_readiness_mode: str
 
     def validate_config(self) -> None: ...
+    def probe_connectivity(self) -> None: ...
 
     def export(
         self,
@@ -51,8 +58,12 @@ class ExportTarget(Protocol):
 @dataclass(frozen=True)
 class SnapshotSourceConnector:
     connector_id: str = "snapshot_jsonl"
+    runtime_readiness_mode: str = "config_only"
 
     def validate_config(self) -> None:
+        return None
+
+    def probe_connectivity(self) -> None:
         return None
 
     def build_feature_mart(
@@ -73,11 +84,15 @@ class SnapshotSourceConnector:
 @dataclass(frozen=True)
 class ClickHouseSourceConnector:
     connector_id: str = "clickhouse_feature_slice"
+    runtime_readiness_mode: str = "config_and_connectivity"
 
     def validate_config(self) -> None:
         errors = validate_clickhouse_source_config()
         if errors:
             raise ValueError("; ".join(errors))
+
+    def probe_connectivity(self) -> None:
+        probe_clickhouse_source_connectivity()
 
     def build_feature_mart(
         self,
@@ -97,8 +112,12 @@ class ClickHouseSourceConnector:
 @dataclass(frozen=True)
 class LocalJsonlExportTarget:
     target_id: str = "local_jsonl"
+    runtime_readiness_mode: str = "config_only"
 
     def validate_config(self) -> None:
+        return None
+
+    def probe_connectivity(self) -> None:
         return None
 
     def export(
@@ -123,6 +142,7 @@ class LocalJsonlExportTarget:
 @dataclass(frozen=True)
 class MinioJsonlExportTarget:
     target_id: str = "minio_jsonl"
+    runtime_readiness_mode: str = "config_and_connectivity"
 
     def validate_config(self) -> None:
         if not minio_is_configured():
@@ -130,6 +150,9 @@ class MinioJsonlExportTarget:
                 "Selected export target requires MinIO configuration, "
                 "but MinIO environment settings are missing."
             )
+
+    def probe_connectivity(self) -> None:
+        probe_minio_connectivity()
 
     def export(
         self,
@@ -154,11 +177,15 @@ class MinioJsonlExportTarget:
 @dataclass(frozen=True)
 class PostgresExportTableTarget:
     target_id: str = "postgres_export_table"
+    runtime_readiness_mode: str = "config_and_connectivity"
 
     def validate_config(self) -> None:
         errors = validate_postgres_export_table_config()
         if errors:
             raise ValueError("; ".join(errors))
+
+    def probe_connectivity(self) -> None:
+        probe_postgres_export_table_connectivity()
 
     def export(
         self,
@@ -181,18 +208,26 @@ class PostgresExportTableTarget:
             policy_result=policy_result,
             export_context=export_context,
         )
-        connector_status = (
-            "written_and_persisted"
-            if write_meta["status"] == "written"
-            else "written_no_rows"
-        )
+        rows_attempted = int(write_meta["rows_attempted"])
+        rows_written = int(write_meta["rows_written"])
+        rows_skipped_conflict = int(write_meta["rows_skipped_conflict"])
+        if rows_attempted == 0:
+            connector_status = "written_no_rows"
+        elif rows_skipped_conflict == 0:
+            connector_status = "written_and_persisted"
+        elif rows_written > 0:
+            connector_status = "written_and_partially_persisted"
+        else:
+            connector_status = "written_conflicts_only"
         return {
             "target_id": self.target_id,
             "export_path": str(export_path),
             "export_uri": None,
             "status": connector_status,
             "postgres_table": write_meta["table"],
-            "rows_written": int(write_meta["rows_written"]),
+            "rows_attempted": rows_attempted,
+            "rows_written": rows_written,
+            "rows_skipped_conflict": rows_skipped_conflict,
         }
 
 
@@ -282,12 +317,41 @@ def export_for_profile(
     }
 
 
-def _runtime_validation_error(connector: Any) -> list[str]:
+def _runtime_readiness_status(connector: Any) -> dict[str, Any]:
+    mode = str(getattr(connector, "runtime_readiness_mode", "config_only"))
+    config_errors: list[str] = []
+    connectivity_errors: list[str] = []
     try:
         connector.validate_config()
     except Exception as exc:
-        return [str(exc)]
-    return []
+        config_errors.append(str(exc))
+
+    connectivity_checked = mode == "config_and_connectivity"
+    connectivity_valid: bool | None = None
+    if connectivity_checked:
+        if config_errors:
+            connectivity_valid = False
+        else:
+            try:
+                connector.probe_connectivity()
+                connectivity_valid = True
+            except Exception as exc:
+                connectivity_valid = False
+                connectivity_errors.append(str(exc))
+
+    errors = [
+        *config_errors,
+        *[f"connectivity: {msg}" for msg in connectivity_errors],
+    ]
+    runnable = not config_errors and (connectivity_valid is not False)
+    return {
+        "runtime_runnable": runnable,
+        "runtime_validation_errors": errors,
+        "runtime_config_valid": not config_errors,
+        "runtime_connectivity_checked": connectivity_checked,
+        "runtime_connectivity_valid": connectivity_valid,
+        "runtime_readiness_mode": mode,
+    }
 
 
 def annotate_runtime_readiness(
@@ -300,40 +364,68 @@ def annotate_runtime_readiness(
     export_rows: list[dict[str, Any]] = []
     profile_rows: list[dict[str, Any]] = []
 
-    source_status_by_id: dict[str, tuple[bool, list[str]]] = {}
+    source_status_by_id: dict[str, dict[str, Any]] = {}
     for row in sources:
         item = dict(row)
         source_id = str(item.get("source_id", "")).strip()
         implemented = item.get("implementation_status") == "implemented"
         connector = _SOURCE_CONNECTORS.get(source_id)
-        errors: list[str] = []
-        if implemented:
-            if connector is None:
-                errors = ["No runtime source connector implementation is registered."]
-            else:
-                errors = _runtime_validation_error(connector)
-        runnable = implemented and connector is not None and not errors
-        item["runtime_runnable"] = runnable
-        item["runtime_validation_errors"] = errors
-        source_status_by_id[source_id] = (runnable, errors)
+        if not implemented:
+            readiness = {
+                "runtime_runnable": False,
+                "runtime_validation_errors": [],
+                "runtime_config_valid": False,
+                "runtime_connectivity_checked": False,
+                "runtime_connectivity_valid": None,
+                "runtime_readiness_mode": "not_implemented",
+            }
+        elif connector is None:
+            readiness = {
+                "runtime_runnable": False,
+                "runtime_validation_errors": [
+                    "No runtime source connector implementation is registered."
+                ],
+                "runtime_config_valid": False,
+                "runtime_connectivity_checked": False,
+                "runtime_connectivity_valid": None,
+                "runtime_readiness_mode": "runtime_missing",
+            }
+        else:
+            readiness = _runtime_readiness_status(connector)
+        item.update(readiness)
+        source_status_by_id[source_id] = readiness
         source_rows.append(item)
 
-    export_status_by_id: dict[str, tuple[bool, list[str]]] = {}
+    export_status_by_id: dict[str, dict[str, Any]] = {}
     for row in exports:
         item = dict(row)
         export_id = str(item.get("export_id", "")).strip()
         implemented = item.get("implementation_status") == "implemented"
         target = _EXPORT_TARGETS.get(export_id)
-        errors: list[str] = []
-        if implemented:
-            if target is None:
-                errors = ["No runtime export target implementation is registered."]
-            else:
-                errors = _runtime_validation_error(target)
-        runnable = implemented and target is not None and not errors
-        item["runtime_runnable"] = runnable
-        item["runtime_validation_errors"] = errors
-        export_status_by_id[export_id] = (runnable, errors)
+        if not implemented:
+            readiness = {
+                "runtime_runnable": False,
+                "runtime_validation_errors": [],
+                "runtime_config_valid": False,
+                "runtime_connectivity_checked": False,
+                "runtime_connectivity_valid": None,
+                "runtime_readiness_mode": "not_implemented",
+            }
+        elif target is None:
+            readiness = {
+                "runtime_runnable": False,
+                "runtime_validation_errors": [
+                    "No runtime export target implementation is registered."
+                ],
+                "runtime_config_valid": False,
+                "runtime_connectivity_checked": False,
+                "runtime_connectivity_valid": None,
+                "runtime_readiness_mode": "runtime_missing",
+            }
+        else:
+            readiness = _runtime_readiness_status(target)
+        item.update(readiness)
+        export_status_by_id[export_id] = readiness
         export_rows.append(item)
 
     for row in profiles:
@@ -342,12 +434,28 @@ def annotate_runtime_readiness(
         source_id = str(item.get("source_id", "")).strip()
         export_id = str(item.get("export_id", "")).strip()
         errors: list[str] = []
-        source_runnable, source_errors = source_status_by_id.get(
-            source_id, (False, ["Source connector is unknown in runtime registry."])
+        source_status = source_status_by_id.get(
+            source_id,
+            {
+                "runtime_runnable": False,
+                "runtime_validation_errors": [
+                    "Source connector is unknown in runtime registry."
+                ],
+            },
         )
-        export_runnable, export_errors = export_status_by_id.get(
-            export_id, (False, ["Export target is unknown in runtime registry."])
+        export_status = export_status_by_id.get(
+            export_id,
+            {
+                "runtime_runnable": False,
+                "runtime_validation_errors": [
+                    "Export target is unknown in runtime registry."
+                ],
+            },
         )
+        source_runnable = bool(source_status.get("runtime_runnable"))
+        source_errors = list(source_status.get("runtime_validation_errors") or [])
+        export_runnable = bool(export_status.get("runtime_runnable"))
+        export_errors = list(export_status.get("runtime_validation_errors") or [])
         if profile_status != "implemented":
             errors.append("Profile is not marked as implemented.")
         if not source_runnable:
@@ -358,6 +466,11 @@ def annotate_runtime_readiness(
             errors.extend([f"export: {msg}" for msg in export_errors])
         item["runtime_runnable"] = profile_status == "implemented" and not errors
         item["runtime_validation_errors"] = errors
+        item["runtime_readiness_mode"] = (
+            "profile_config_and_connectivity"
+            if profile_status == "implemented"
+            else "not_implemented"
+        )
         profile_rows.append(item)
 
     return {"sources": source_rows, "exports": export_rows, "profiles": profile_rows}

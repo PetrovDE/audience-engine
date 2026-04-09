@@ -29,6 +29,7 @@ This will:
 - Integration MVP connector env settings:
   - ClickHouse source: `CLICKHOUSE_*`, `CLICKHOUSE_FEATURE_SLICE_QUERY`, `CLICKHOUSE_FEATURE_SLICE_LIMIT`
   - Postgres export table: `EXPORT_POSTGRES_*` (defaults can inherit from `POSTGRES_*`)
+  - Runtime readiness probe timeout: `INTEGRATION_READINESS_PROBE_TIMEOUT_SECONDS` (seconds)
 
 ## Lint and Format
 ```bash
@@ -56,6 +57,7 @@ Direct pytest usage via `uv` is also available:
 ```bash
 uv run pytest -q tests/unit
 uv run pytest -q tests/integration
+uv run pytest -q tests/integration/test_clickhouse_postgres_export_e2e.py
 ```
 
 ## CI (GitHub Actions)
@@ -120,6 +122,10 @@ curl -H "X-AE-API-Key: admin_local_key" \
 
 curl -H "X-AE-API-Key: admin_local_key" \
   http://localhost:8000/v1/admin/control-plane/integrations
+
+# readiness fields to check in response:
+# runtime_runnable, runtime_readiness_mode, runtime_config_valid,
+# runtime_connectivity_checked, runtime_connectivity_valid
 
 curl -X POST -H "X-AE-API-Key: admin_local_key" -H "Content-Type: application/json" \
   -d '{"campaign_id":"camp_manual","policy_version":"policy_credit_v1","integration_profile_id":"clickhouse_postgres_export","requested_size":20}' \

@@ -5,7 +5,40 @@ from pathlib import Path
 from pipelines.minimal_slice import integrations
 
 
-def test_annotate_runtime_readiness_marks_clickhouse_postgres_profile_runnable():
+def test_annotate_runtime_readiness_marks_clickhouse_postgres_profile_runnable(
+    monkeypatch,
+):
+    class _FakeSource:
+        connector_id = "clickhouse_feature_slice"
+        runtime_readiness_mode = "config_and_connectivity"
+
+        def validate_config(self):
+            return None
+
+        def probe_connectivity(self):
+            return None
+
+    class _FakeTarget:
+        target_id = "postgres_export_table"
+        runtime_readiness_mode = "config_and_connectivity"
+
+        def validate_config(self):
+            return None
+
+        def probe_connectivity(self):
+            return None
+
+    monkeypatch.setitem(
+        integrations._SOURCE_CONNECTORS,  # type: ignore[attr-defined]
+        "clickhouse_feature_slice",
+        _FakeSource(),
+    )
+    monkeypatch.setitem(
+        integrations._EXPORT_TARGETS,  # type: ignore[attr-defined]
+        "postgres_export_table",
+        _FakeTarget(),
+    )
+
     result = integrations.annotate_runtime_readiness(
         sources=[
             {
@@ -30,7 +63,11 @@ def test_annotate_runtime_readiness_marks_clickhouse_postgres_profile_runnable()
     )
 
     assert result["sources"][0]["runtime_runnable"] is True
+    assert result["sources"][0]["runtime_config_valid"] is True
+    assert result["sources"][0]["runtime_connectivity_checked"] is True
+    assert result["sources"][0]["runtime_connectivity_valid"] is True
     assert result["exports"][0]["runtime_runnable"] is True
+    assert result["exports"][0]["runtime_readiness_mode"] == "config_and_connectivity"
     assert result["profiles"][0]["runtime_runnable"] is True
     assert result["profiles"][0]["runtime_validation_errors"] == []
 
@@ -40,8 +77,12 @@ def test_export_for_profile_passes_export_context_to_target(monkeypatch, tmp_pat
 
     class _FakeSource:
         connector_id = "clickhouse_feature_slice"
+        runtime_readiness_mode = "config_only"
 
         def validate_config(self):
+            return None
+
+        def probe_connectivity(self):
             return None
 
         def build_feature_mart(self, *, raw_path, output_path, run_id):
@@ -49,8 +90,12 @@ def test_export_for_profile_passes_export_context_to_target(monkeypatch, tmp_pat
 
     class _FakeTarget:
         target_id = "postgres_export_table"
+        runtime_readiness_mode = "config_only"
 
         def validate_config(self):
+            return None
+
+        def probe_connectivity(self):
             return None
 
         def export(
@@ -116,3 +161,39 @@ def test_export_for_profile_passes_export_context_to_target(monkeypatch, tmp_pat
 
     assert result["export_id"] == "postgres_export_table"
     assert captured["export_context"] == export_context
+
+
+def test_annotate_runtime_readiness_reports_connectivity_failure(monkeypatch):
+    class _BrokenSource:
+        connector_id = "clickhouse_feature_slice"
+        runtime_readiness_mode = "config_and_connectivity"
+
+        def validate_config(self):
+            return None
+
+        def probe_connectivity(self):
+            raise RuntimeError("dial tcp timeout")
+
+    monkeypatch.setitem(
+        integrations._SOURCE_CONNECTORS,  # type: ignore[attr-defined]
+        "clickhouse_feature_slice",
+        _BrokenSource(),
+    )
+
+    result = integrations.annotate_runtime_readiness(
+        sources=[
+            {
+                "source_id": "clickhouse_feature_slice",
+                "implementation_status": "implemented",
+            }
+        ],
+        exports=[],
+        profiles=[],
+    )
+
+    row = result["sources"][0]
+    assert row["runtime_runnable"] is False
+    assert row["runtime_config_valid"] is True
+    assert row["runtime_connectivity_checked"] is True
+    assert row["runtime_connectivity_valid"] is False
+    assert any("connectivity:" in msg for msg in row["runtime_validation_errors"])

@@ -18,6 +18,10 @@ Use this sequence for operational usage.
    curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" "http://localhost:8000/v1/admin/control-plane/integrations?include_planned=false"
    curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" http://localhost:8000/v1/admin/control-plane/policies
    ```
+   Readiness interpretation:
+   - `runtime_runnable=true` is the operator-safe gate.
+   - For `runtime_readiness_mode=config_and_connectivity`, both config and a live lightweight connectivity probe succeeded.
+   - For `runtime_readiness_mode=config_only`, config validation passed and no network probe is required for that connector type.
 3. (Optional) Update operator defaults:
    ```bash
    curl -X PUT -H "X-AE-API-Key: ${AE_ADMIN_KEY}" -H "Content-Type: application/json" \
@@ -36,6 +40,10 @@ Use this sequence for operational usage.
    curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" http://localhost:8000/v1/admin/runs/latest-summary
    curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" "http://localhost:8000/v1/admin/runs/recent?limit=20"
    ```
+   For `postgres_export_table`, summary export metadata includes:
+   - `rows_attempted`: approved rows attempted for staging insert.
+   - `rows_written`: actually inserted rows.
+   - `rows_skipped_conflict`: duplicate `(run_id, customer_id)` rows skipped by idempotent conflict handling.
 6. Inspect lifecycle and policy audit if needed:
    ```bash
    curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" "http://localhost:8000/v1/admin/index/lifecycle-audit?limit=20"
