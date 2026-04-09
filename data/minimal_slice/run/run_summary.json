@@ -1,5 +1,5 @@
 {
-  "run_ts": "2026-04-09T13:03:24.562351+00:00",
+  "run_ts": "2026-04-09T15:04:54.721360+00:00",
   "status": "ok",
   "operations": {
     "policy_version": "policy_credit_v1",
@@ -18,8 +18,8 @@
     "model_version": "nomic-embed-text",
     "policy_version": "policy_credit_v1",
     "index_alias": "audience-serving",
-    "concrete_qdrant_collection": "audience-serving-fs_credit_v1-5f840c74",
-    "run_id": "5f840c74-dab2-41a3-aa1b-9ad3f6c8cce9",
+    "concrete_qdrant_collection": "audience-serving-fs_credit_v1-24df75a1",
+    "run_id": "24df75a1-9912-4689-a458-4814d19f8aa2",
     "campaign_id": "camp_clickhouse_postgres_e2e"
   },
   "inputs": {
@@ -81,8 +81,8 @@
   "index": {
     "stage": "promote_alias",
     "alias": "audience-serving",
-    "collection": "audience-serving-fs_credit_v1-5f840c74",
-    "previous_collection": "audience-serving-fs_credit_v1-4b423569"
+    "collection": "audience-serving-fs_credit_v1-24df75a1",
+    "previous_collection": null
   },
   "retrieval": {
     "query_customer_id": "cust_00000",
