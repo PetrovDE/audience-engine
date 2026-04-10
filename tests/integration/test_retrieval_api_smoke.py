@@ -340,6 +340,11 @@ def test_trigger_operator_run_smoke(monkeypatch):
         policy_version=None,
         integration_profile_id=None,
         delivery_target_id=None,
+        feature_set_version_id=None,
+        model_version_id=None,
+        embedding_model_version_id=None,
+        policy_version_id=None,
+        audience_definition_version_id=None,
         requested_size=20: {
             "status": "ok",
             "versions": {
@@ -349,6 +354,8 @@ def test_trigger_operator_run_smoke(monkeypatch):
             },
             "operations": {
                 "integration_profile_id": integration_profile_id
+                or "local_snapshot_local_export",
+                "export_profile_id": integration_profile_id
                 or "local_snapshot_local_export",
                 "delivery_target_id": delivery_target_id or "crm_postgres_outbox",
             },
@@ -370,7 +377,142 @@ def test_trigger_operator_run_smoke(monkeypatch):
     assert body["status"] == "ok"
     assert body["campaign_id"] == "camp_manual"
     assert body["integration_profile_id"] == "local_snapshot_local_export"
+    assert body["export_profile_id"] == "local_snapshot_local_export"
     assert body["delivery_target_id"] == "crm_postgres_outbox"
+
+
+def test_control_plane_registry_endpoints_smoke(monkeypatch):
+    monkeypatch.setattr(
+        app_module.control_plane_registry,
+        "create_draft_version",
+        lambda **kwargs: {
+            "version_id": "ad7f34f3-54d3-4caf-b603-ff3f064adb3d",
+            "entity_key": kwargs["entity_key"],
+            "version": kwargs["version"],
+            "lifecycle_state": "draft",
+            "payload": kwargs.get("metadata", {}),
+        },
+    )
+    monkeypatch.setattr(
+        app_module.control_plane_registry,
+        "list_versions",
+        lambda **kwargs: [
+            {
+                "version_id": "ad7f34f3-54d3-4caf-b603-ff3f064adb3d",
+                "entity_key": "fs_credit",
+                "version": "fs_credit_v2",
+                "lifecycle_state": "draft",
+                "payload": {},
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        app_module.control_plane_registry,
+        "get_active_version",
+        lambda **kwargs: {
+            "version_id": "c4c5f52d-ec77-4fa8-8963-03de9ad89866",
+            "entity_key": "fs_credit",
+            "version": "fs_credit_v1",
+            "lifecycle_state": "active",
+            "payload": {},
+        },
+    )
+    monkeypatch.setattr(
+        app_module.control_plane_registry,
+        "transition_version_state",
+        lambda **kwargs: {
+            "version_id": kwargs["version_id"],
+            "entity_key": "fs_credit",
+            "version": "fs_credit_v2",
+            "lifecycle_state": kwargs["target_state"],
+            "payload": {},
+        },
+    )
+
+    create_resp = client.post(
+        "/v1/admin/control-plane/registry/feature_sets/versions/draft",
+        json={
+            "entity_key": "fs_credit",
+            "version": "fs_credit_v2",
+            "metadata": {"owner": "data_engineering"},
+            "references": {},
+        },
+        headers=_headers(ADMIN_KEY),
+    )
+    list_resp = client.get(
+        "/v1/admin/control-plane/registry/feature_sets/versions?entity_key=fs_credit",
+        headers=_headers(ADMIN_KEY),
+    )
+    active_resp = client.get(
+        "/v1/admin/control-plane/registry/feature_sets/versions/active?entity_key=fs_credit",
+        headers=_headers(ADMIN_KEY),
+    )
+    transition_resp = client.post(
+        "/v1/admin/control-plane/registry/feature_sets/versions/ad7f34f3-54d3-4caf-b603-ff3f064adb3d/state",
+        json={"target_state": "validated"},
+        headers=_headers(ADMIN_KEY),
+    )
+
+    assert create_resp.status_code == 200
+    assert create_resp.json()["lifecycle_state"] == "draft"
+    assert list_resp.status_code == 200
+    assert list_resp.json()["count"] == 1
+    assert active_resp.status_code == 200
+    assert active_resp.json()["lifecycle_state"] == "active"
+    assert transition_resp.status_code == 200
+    assert transition_resp.json()["lifecycle_state"] == "validated"
+
+
+def test_trigger_operator_run_passes_explicit_lineage_ids(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def _run(**kwargs):
+        captured.update(kwargs)
+        return {
+            "status": "ok",
+            "versions": {
+                "run_id": "e0f62885-0dbc-4d53-b1d5-59fd0be558e2",
+                "campaign_id": "camp_lineage",
+                "policy_version": "policy_credit_v1",
+            },
+            "operations": {
+                "integration_profile_id": kwargs.get("integration_profile_id"),
+                "export_profile_id": kwargs.get("integration_profile_id"),
+                "delivery_target_id": kwargs.get("delivery_target_id"),
+            },
+        }
+
+    monkeypatch.setattr(app_module.run_flow, "run_minimal_vertical_slice", _run)
+
+    response = client.post(
+        "/v1/admin/runs/trigger",
+        json={
+            "campaign_id": "camp_lineage",
+            "policy_version": "policy_credit_v1",
+            "export_profile_id": "clickhouse_postgres_export",
+            "delivery_target_id": "crm_csv_file",
+            "feature_set_version_id": "d4295d8f-c391-4730-b827-5e92f74fdc27",
+            "model_version_id": "7e8ce4be-a6fd-4fe5-a85a-3c5f903fce79",
+            "embedding_model_version_id": "78de4658-4c27-4835-b29d-f19687093f1d",
+            "policy_version_id": "7f3029bd-0eb9-4d81-a0f3-88202523fca6",
+            "audience_definition_version_id": "8ac37deb-4e2d-45d7-bbe4-1846a9027dc1",
+        },
+        headers=_headers(ADMIN_KEY),
+    )
+
+    assert response.status_code == 200
+    assert captured["integration_profile_id"] == "clickhouse_postgres_export"
+    assert captured["feature_set_version_id"] == "d4295d8f-c391-4730-b827-5e92f74fdc27"
+    assert captured["model_version_id"] == "7e8ce4be-a6fd-4fe5-a85a-3c5f903fce79"
+    assert (
+        captured["embedding_model_version_id"]
+        == "78de4658-4c27-4835-b29d-f19687093f1d"
+    )
+    assert captured["policy_version_id"] == "7f3029bd-0eb9-4d81-a0f3-88202523fca6"
+    assert (
+        captured["audience_definition_version_id"]
+        == "8ac37deb-4e2d-45d7-bbe4-1846a9027dc1"
+    )
 
 
 def test_delivery_endpoints_smoke(monkeypatch):
@@ -488,6 +630,8 @@ def test_campaign_role_cannot_update_defaults_or_trigger_run():
         ("get", "/v1/admin/control-plane/integrations"),
         ("get", "/v1/admin/control-plane/delivery-targets"),
         ("get", "/v1/admin/control-plane/policies"),
+        ("get", "/v1/admin/control-plane/registry/feature_sets/versions"),
+        ("get", "/v1/admin/control-plane/registry/feature_sets/versions/active"),
         ("get", "/v1/admin/runs/recent"),
         ("get", "/v1/admin/runs/latest-summary"),
         ("post", "/v1/admin/delivery/trigger"),

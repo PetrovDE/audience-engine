@@ -13,7 +13,13 @@ from pipelines.version_bundle import (
     preflight_version_bundle,
 )
 
-from . import control_plane, delivery_runner, integrations, lifecycle_service
+from . import (
+    control_plane,
+    control_plane_registry,
+    delivery_runner,
+    integrations,
+    lifecycle_service,
+)
 from .config import (
     BLACKLIST_PATH,
     COMM_HISTORY_PATH,
@@ -115,6 +121,7 @@ def _build_audit_rows(
     resolved_collection: str,
     operation_context: dict,
     export_context: dict,
+    lineage_binding: dict | None = None,
 ) -> tuple[dict, list[tuple], list[tuple], list[tuple]]:
     ranking: dict[str, tuple[float, int]] = {}
     for idx, row in enumerate(retrieved, start=1):
@@ -166,6 +173,7 @@ def _build_audit_rows(
             "operation_context": operation_context,
             "export_context": export_context,
         },
+        "lineage_binding": lineage_binding or {},
     }
     decision_rows = build_policy_decision_audit_rows(
         policy_result=policy_result,
@@ -183,6 +191,11 @@ def _write_audit_to_postgres(
     rejection_rows: list[tuple],
     decision_rows: list[tuple],
 ) -> None:
+    lineage_binding = run_row.get("lineage_binding")
+    if not isinstance(lineage_binding, dict):
+        lineage_binding = {}
+    lineage_strict = bool(run_row.get("lineage_strict", False))
+
     with psycopg.connect(_postgres_conninfo()) as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -206,6 +219,31 @@ def _write_audit_to_postgres(
                     json.dumps(run_row["parameters"]),
                 ),
             )
+            try:
+                control_plane_registry.persist_run_lineage_binding(
+                    cur,
+                    run_id=run_row["run_id"],
+                    feature_set_version_id=lineage_binding.get(
+                        "feature_set_version_id"
+                    ),
+                    model_version_id=lineage_binding.get("model_version_id"),
+                    embedding_model_version_id=lineage_binding.get(
+                        "embedding_model_version_id"
+                    ),
+                    policy_version_id=lineage_binding.get("policy_version_id"),
+                    audience_definition_version_id=lineage_binding.get(
+                        "audience_definition_version_id"
+                    ),
+                    delivery_target_id=lineage_binding.get("delivery_target_id"),
+                    export_profile_id=lineage_binding.get("export_profile_id"),
+                )
+            except Exception as exc:
+                if lineage_strict:
+                    raise
+                logger.warning(
+                    "Skipping non-strict run lineage binding persistence: %s",
+                    exc,
+                )
             if selected_rows:
                 cur.executemany(
                     """
@@ -317,9 +355,20 @@ def _append_run_event(
         if isinstance(versions, dict)
         else None,
         "integration_profile_id": operation_context.get("integration_profile_id"),
+        "export_profile_id": operation_context.get("export_profile_id")
+        or operation_context.get("integration_profile_id"),
         "source_id": operation_context.get("source_id"),
         "export_id": operation_context.get("export_id"),
         "delivery_target_id": operation_context.get("delivery_target_id"),
+        "feature_set_version_id": operation_context.get("feature_set_version_id"),
+        "model_version_id": operation_context.get("model_version_id"),
+        "embedding_model_version_id": operation_context.get(
+            "embedding_model_version_id"
+        ),
+        "policy_version_id": operation_context.get("policy_version_id"),
+        "audience_definition_version_id": operation_context.get(
+            "audience_definition_version_id"
+        ),
         "quality_status": quality.get("status") if isinstance(quality, dict) else None,
         "export_status": export.get("status") if isinstance(export, dict) else None,
         "export_uri": export.get("export_uri") if isinstance(export, dict) else None,
@@ -353,8 +402,25 @@ def _append_early_failure_run_event(
         "emb_version": None,
         "integration_profile_id": operation_context.get("integration_profile_id")
         or early_context.get("requested_integration_profile_id"),
+        "export_profile_id": operation_context.get("export_profile_id")
+        or operation_context.get("integration_profile_id")
+        or early_context.get("requested_integration_profile_id"),
         "delivery_target_id": operation_context.get("delivery_target_id")
         or early_context.get("requested_delivery_target_id"),
+        "feature_set_version_id": operation_context.get("feature_set_version_id")
+        or early_context.get("requested_feature_set_version_id"),
+        "model_version_id": operation_context.get("model_version_id")
+        or early_context.get("requested_model_version_id"),
+        "embedding_model_version_id": operation_context.get(
+            "embedding_model_version_id"
+        )
+        or early_context.get("requested_embedding_model_version_id"),
+        "policy_version_id": operation_context.get("policy_version_id")
+        or early_context.get("requested_policy_version_id"),
+        "audience_definition_version_id": operation_context.get(
+            "audience_definition_version_id"
+        )
+        or early_context.get("requested_audience_definition_version_id"),
         "source_id": operation_context.get("source_id"),
         "export_id": operation_context.get("export_id"),
         "quality_status": "failed",
@@ -371,6 +437,21 @@ def _append_early_failure_run_event(
             ),
             "requested_delivery_target_id": early_context.get(
                 "requested_delivery_target_id"
+            ),
+            "requested_feature_set_version_id": early_context.get(
+                "requested_feature_set_version_id"
+            ),
+            "requested_model_version_id": early_context.get(
+                "requested_model_version_id"
+            ),
+            "requested_embedding_model_version_id": early_context.get(
+                "requested_embedding_model_version_id"
+            ),
+            "requested_policy_version_id": early_context.get(
+                "requested_policy_version_id"
+            ),
+            "requested_audience_definition_version_id": early_context.get(
+                "requested_audience_definition_version_id"
             ),
             "policy_selection_source": operation_context.get("policy_selection_source"),
             "integration_selection_source": operation_context.get(
@@ -393,6 +474,11 @@ def run_minimal_vertical_slice(
     policy_version: str | None = None,
     integration_profile_id: str | None = None,
     delivery_target_id: str | None = None,
+    feature_set_version_id: str | None = None,
+    model_version_id: str | None = None,
+    embedding_model_version_id: str | None = None,
+    policy_version_id: str | None = None,
+    audience_definition_version_id: str | None = None,
     requested_size: int = 20,
 ) -> dict:
     early_context = {
@@ -400,6 +486,11 @@ def run_minimal_vertical_slice(
         "requested_policy_version": policy_version,
         "requested_integration_profile_id": integration_profile_id,
         "requested_delivery_target_id": delivery_target_id,
+        "requested_feature_set_version_id": feature_set_version_id,
+        "requested_model_version_id": model_version_id,
+        "requested_embedding_model_version_id": embedding_model_version_id,
+        "requested_policy_version_id": policy_version_id,
+        "requested_audience_definition_version_id": audience_definition_version_id,
         "requested_size": requested_size,
     }
     operation_context: dict = {}
@@ -416,6 +507,7 @@ def run_minimal_vertical_slice(
             "policy_version": run_config.policy_version,
             "policy_selection_source": run_config.policy_selection_source,
             "integration_profile_id": run_config.integration_profile_id,
+            "export_profile_id": run_config.integration_profile_id,
             "integration_selection_source": run_config.integration_selection_source,
             "delivery_target_id": run_config.delivery_target_id,
             "delivery_selection_source": run_config.delivery_selection_source,
@@ -428,6 +520,46 @@ def run_minimal_vertical_slice(
             campaign_id=campaign_id or str(uuid4()),
             policy_version=run_config.policy_version,
         )
+        explicit_lineage_requested = any(
+            [
+                feature_set_version_id,
+                model_version_id,
+                embedding_model_version_id,
+                policy_version_id,
+                audience_definition_version_id,
+            ]
+        )
+        lineage_binding = {
+            "feature_set_version_id": None,
+            "model_version_id": None,
+            "embedding_model_version_id": None,
+            "policy_version_id": None,
+            "audience_definition_version_id": None,
+            "delivery_target_id": run_config.delivery_target_id,
+            "export_profile_id": run_config.integration_profile_id,
+        }
+        try:
+            resolved_binding = control_plane_registry.resolve_run_lineage_binding(
+                fs_version=bundle.fs_version,
+                model_version=bundle.model_version,
+                policy_version=bundle.policy_version,
+                feature_set_version_id=feature_set_version_id,
+                model_version_id=model_version_id,
+                embedding_model_version_id=embedding_model_version_id,
+                policy_version_id=policy_version_id,
+                audience_definition_version_id=audience_definition_version_id,
+            )
+            lineage_binding.update(resolved_binding)
+        except Exception as exc:
+            if explicit_lineage_requested:
+                raise
+            logger.warning(
+                "Control-plane registry lineage resolution unavailable: %s",
+                exc,
+            )
+
+        operation_context.update(lineage_binding)
+        operation_context["export_profile_id"] = run_config.integration_profile_id
         failure_stage = "run_pipeline"
         generated = generate_synthetic_data(customer_count=200, seed=7)
         quality_checks.append(validate_raw_contract(generated["raw"]))
@@ -518,7 +650,9 @@ def run_minimal_vertical_slice(
             resolved_collection=index_meta["collection"],
             operation_context=operation_context,
             export_context=pre_export_audit_context,
+            lineage_binding=lineage_binding,
         )
+        run_row["lineage_strict"] = explicit_lineage_requested
         _write_audit_to_postgres(
             run_row=run_row,
             selected_rows=selected_rows,

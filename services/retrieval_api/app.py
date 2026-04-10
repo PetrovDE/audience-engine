@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from pipelines.minimal_slice import (
     control_plane,
+    control_plane_registry,
     delivery_runner,
     integrations,
     lifecycle_service,
@@ -70,8 +71,25 @@ class TriggerRunRequest(BaseModel):
     campaign_id: Optional[str] = None
     policy_version: Optional[str] = None
     integration_profile_id: Optional[str] = None
+    export_profile_id: Optional[str] = None
     delivery_target_id: Optional[str] = None
+    feature_set_version_id: Optional[str] = None
+    model_version_id: Optional[str] = None
+    embedding_model_version_id: Optional[str] = None
+    policy_version_id: Optional[str] = None
+    audience_definition_version_id: Optional[str] = None
     requested_size: int = Field(default=20, ge=1, le=500)
+
+
+class RegistryCreateDraftRequest(BaseModel):
+    entity_key: str
+    version: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    references: dict[str, Any] = Field(default_factory=dict)
+
+
+class RegistryTransitionRequest(BaseModel):
+    target_state: str
 
 
 class TriggerDeliveryRequest(BaseModel):
@@ -274,6 +292,97 @@ def list_control_plane_delivery_targets(
     }
 
 
+@app.post("/v1/admin/control-plane/registry/{entity_type}/versions/draft")
+def create_registry_draft_version(
+    entity_type: str,
+    request: RegistryCreateDraftRequest,
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    try:
+        created = control_plane_registry.create_draft_version(
+            entity_type=entity_type,
+            entity_key=request.entity_key,
+            version=request.version,
+            metadata=request.metadata,
+            references=request.references,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return created
+
+
+@app.get("/v1/admin/control-plane/registry/{entity_type}/versions")
+def list_registry_versions(
+    entity_type: str,
+    entity_key: Optional[str] = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    try:
+        rows = control_plane_registry.list_versions(
+            entity_type=entity_type,
+            entity_key=entity_key,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {"count": len(rows), "versions": rows}
+
+
+@app.get("/v1/admin/control-plane/registry/{entity_type}/versions/active")
+def get_registry_active_version(
+    entity_type: str,
+    entity_key: Optional[str] = Query(default=None),
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    try:
+        active = control_plane_registry.get_active_version(
+            entity_type=entity_type,
+            entity_key=entity_key,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if active is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "No active version found for "
+                f"entity_type={entity_type} entity_key={entity_key or '*'}"
+            ),
+        )
+    return active
+
+
+@app.post("/v1/admin/control-plane/registry/{entity_type}/versions/{version_id}/state")
+def transition_registry_version_state(
+    entity_type: str,
+    version_id: str,
+    request: RegistryTransitionRequest,
+    principal: Principal = Depends(require_admin),
+) -> dict:
+    _ = principal
+    try:
+        row = control_plane_registry.transition_version_state(
+            entity_type=entity_type,
+            version_id=version_id,
+            target_state=request.target_state,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return row
+
+
 @app.get("/v1/admin/runs/latest-summary")
 def get_latest_run_summary(
     principal: Principal = Depends(require_admin),
@@ -304,12 +413,30 @@ def trigger_operator_run(
     principal: Principal = Depends(require_admin),
 ) -> dict:
     _ = principal
+    if (
+        request.integration_profile_id
+        and request.export_profile_id
+        and request.integration_profile_id != request.export_profile_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "integration_profile_id and export_profile_id must match when "
+                "both are provided."
+            ),
+        )
+    resolved_profile_id = request.integration_profile_id or request.export_profile_id
     try:
         summary = run_flow.run_minimal_vertical_slice(
             campaign_id=request.campaign_id,
             policy_version=request.policy_version,
-            integration_profile_id=request.integration_profile_id,
+            integration_profile_id=resolved_profile_id,
             delivery_target_id=request.delivery_target_id,
+            feature_set_version_id=request.feature_set_version_id,
+            model_version_id=request.model_version_id,
+            embedding_model_version_id=request.embedding_model_version_id,
+            policy_version_id=request.policy_version_id,
+            audience_definition_version_id=request.audience_definition_version_id,
             requested_size=request.requested_size,
         )
     except DataQualityError as exc:
@@ -327,6 +454,8 @@ def trigger_operator_run(
         "integration_profile_id": summary.get("operations", {}).get(
             "integration_profile_id"
         ),
+        "export_profile_id": summary.get("operations", {}).get("export_profile_id")
+        or summary.get("operations", {}).get("integration_profile_id"),
         "delivery_target_id": summary.get("operations", {}).get("delivery_target_id"),
         "summary": summary,
     }

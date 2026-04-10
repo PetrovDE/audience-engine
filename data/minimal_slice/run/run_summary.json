@@ -1,16 +1,22 @@
 {
-  "run_ts": "2026-04-09T17:00:05.835328+00:00",
+  "run_ts": "2026-04-10T17:37:26.426977+00:00",
   "status": "ok",
   "operations": {
     "policy_version": "policy_credit_v1",
     "policy_selection_source": "request",
     "integration_profile_id": "clickhouse_postgres_export",
+    "export_profile_id": "clickhouse_postgres_export",
     "integration_selection_source": "request",
     "delivery_target_id": "crm_postgres_outbox",
     "delivery_selection_source": "request",
     "source_id": "clickhouse_feature_slice",
     "export_id": "postgres_export_table",
     "requested_size": 3,
+    "feature_set_version_id": null,
+    "model_version_id": null,
+    "embedding_model_version_id": "1ec72509-8297-4ede-8dc6-caafc4d8a1de",
+    "policy_version_id": null,
+    "audience_definition_version_id": "08c35624-3208-4322-828c-0a4bcede0d42",
     "profile_id": "clickhouse_postgres_export",
     "implementation_status": "implemented"
   },
@@ -20,9 +26,9 @@
     "model_version": "nomic-embed-text",
     "policy_version": "policy_credit_v1",
     "index_alias": "audience-serving",
-    "concrete_qdrant_collection": "audience-serving-fs_credit_v1-06f37621",
-    "run_id": "06f37621-423e-49d9-814a-7776b8509d09",
-    "campaign_id": "camp_clickhouse_postgres_e2e"
+    "concrete_qdrant_collection": "audience-serving-fs_credit_v1-c14dc1f2",
+    "run_id": "c14dc1f2-3748-4379-a418-0624c30560dd",
+    "campaign_id": "camp_admin_delivery_api_e2e"
   },
   "inputs": {
     "raw_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\synthetic_customers.jsonl",
@@ -83,8 +89,8 @@
   "index": {
     "stage": "promote_alias",
     "alias": "audience-serving",
-    "collection": "audience-serving-fs_credit_v1-06f37621",
-    "previous_collection": "audience-serving-fs_credit_v1-96ded8c3"
+    "collection": "audience-serving-fs_credit_v1-c14dc1f2",
+    "previous_collection": "audience-serving-fs_credit_v1-89f448e8"
   },
   "retrieval": {
     "query_customer_id": "cust_00000",
@@ -117,9 +123,9 @@
     "profile_status": "implemented"
   },
   "delivery": {
-    "delivery_job_id": "b5288f32-fd6a-42bd-8384-38915828d759",
-    "run_id": "06f37621-423e-49d9-814a-7776b8509d09",
-    "campaign_id": "camp_clickhouse_postgres_e2e",
+    "delivery_job_id": "04742fae-d820-4bf9-a14d-7699e215a059",
+    "run_id": "c14dc1f2-3748-4379-a418-0624c30560dd",
+    "campaign_id": "camp_admin_delivery_api_e2e",
     "delivery_target_id": "crm_postgres_outbox",
     "status": "delivered",
     "source_row_count": 3,
@@ -127,7 +133,7 @@
     "rows_delivered": 3,
     "rows_skipped_conflict": 0,
     "artifact_uri": null,
-    "completed_at": "2026-04-09T17:00:06.088686+00:00"
+    "completed_at": "2026-04-10T17:37:26.606845+00:00"
   },
   "audit": {
     "postgres": {

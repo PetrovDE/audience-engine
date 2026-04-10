@@ -435,3 +435,91 @@ def test_run_flow_logs_event_on_bundle_preflight_failure(monkeypatch):
     assert event["campaign_id"] == "camp_bundle_fail"
     assert event["policy_version"] == "policy_credit_v1"
     assert event["integration_profile_id"] == "local_snapshot_local_export"
+
+
+def test_write_audit_to_postgres_persists_lineage_binding(monkeypatch):
+    executed: list[tuple[str, tuple | None]] = []
+
+    class _Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, query, params=None):
+            executed.append((str(query), params))
+
+        def executemany(self, query, rows):
+            executed.append((str(query), tuple(rows)))
+
+    class _Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def cursor(self):
+            return _Cursor()
+
+        def commit(self):
+            return None
+
+    class _Psycopg:
+        @staticmethod
+        def connect(conninfo):
+            return _Connection()
+
+    monkeypatch.setattr(run_flow, "psycopg", _Psycopg)
+
+    run_flow._write_audit_to_postgres(
+        run_row={
+            "run_id": "e0f62885-0dbc-4d53-b1d5-59fd0be558e2",
+            "campaign_id": "camp_test",
+            "product_id": "minimal_slice",
+            "run_ts": "2026-04-10T00:00:00+00:00",
+            "version_bundle": {
+                "fs_version": "fs_credit_v1",
+                "emb_version": "fs_credit_v1+prompt_credit_v1+nomic-embed-text",
+                "model_version": "nomic-embed-text",
+                "policy_version": "policy_credit_v1",
+                "index_alias": "audience-serving",
+                "concrete_qdrant_collection": "audience-serving-fs_credit_v1-abc12345",
+                "run_id": "e0f62885-0dbc-4d53-b1d5-59fd0be558e2",
+                "campaign_id": "camp_test",
+            },
+            "parameters": {"operation_context": {}},
+            "lineage_binding": {
+                "feature_set_version_id": "d4295d8f-c391-4730-b827-5e92f74fdc27",
+                "model_version_id": "7e8ce4be-a6fd-4fe5-a85a-3c5f903fce79",
+                "embedding_model_version_id": "78de4658-4c27-4835-b29d-f19687093f1d",
+                "policy_version_id": "7f3029bd-0eb9-4d81-a0f3-88202523fca6",
+                "audience_definition_version_id": (
+                    "8ac37deb-4e2d-45d7-bbe4-1846a9027dc1"
+                ),
+                "delivery_target_id": "crm_csv_file",
+                "export_profile_id": "clickhouse_postgres_export",
+            },
+            "lineage_strict": True,
+        },
+        selected_rows=[],
+        rejection_rows=[],
+        decision_rows=[],
+    )
+
+    lineage_queries = [
+        params
+        for sql, params in executed
+        if "INSERT INTO audience_run_lineage_binding" in sql
+    ]
+    assert len(lineage_queries) == 1
+    lineage_params = lineage_queries[0]
+    assert lineage_params is not None
+    assert lineage_params[1] == "d4295d8f-c391-4730-b827-5e92f74fdc27"
+    assert lineage_params[2] == "7e8ce4be-a6fd-4fe5-a85a-3c5f903fce79"
+    assert lineage_params[3] == "78de4658-4c27-4835-b29d-f19687093f1d"
+    assert lineage_params[4] == "7f3029bd-0eb9-4d81-a0f3-88202523fca6"
+    assert lineage_params[5] == "8ac37deb-4e2d-45d7-bbe4-1846a9027dc1"
+    assert lineage_params[6] == "crm_csv_file"
+    assert lineage_params[7] == "clickhouse_postgres_export"
