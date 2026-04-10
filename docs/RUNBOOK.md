@@ -10,9 +10,12 @@ Use this sequence for operational usage.
 
 1. Open the operator UI in browser:
    ```text
-   http://localhost:8000/operator
+   http://localhost:8000/
    ```
-2. Login with an admin API key from `AE_ADMIN_API_KEYS`.
+2. Login with Operator Console credentials from env:
+   - `OPERATOR_UI_USERNAME`
+   - `OPERATOR_UI_PASSWORD`
+   - local bootstrap default: `admin / 203217` (dev-only)
 3. Use **Dashboard** and **Integrations / Readiness** to inspect:
    - integration readiness
    - delivery target readiness
@@ -59,7 +62,7 @@ API/DAG-only notes (still implemented and supported):
    ```
 3. Run minimal slice:
    ```bash
-   python -m pipelines.minimal_slice.run_flow
+   uv run --env-file infra/.env.local python -m pipelines.minimal_slice.run_flow
    ```
 
 ## Durable Data Paths (MinIO / ClickHouse / Redis)
@@ -173,7 +176,7 @@ curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" \
 System-triggered lifecycle operations are supported for internal runtime/ops flows, but they must use the same `lifecycle_service` control path and write `index_lifecycle_audit` rows.
 
 Examples:
-- Minimal runtime flow (`python -m pipelines.minimal_slice.run_flow`) uses actor `system:run_flow`.
+- Minimal runtime flow (`uv run --env-file infra/.env.local python -m pipelines.minimal_slice.run_flow`) uses actor `system:run_flow`.
 - Airflow DAG lifecycle tasks use actor `system:airflow:<run_id>`.
 - Make lifecycle commands use actor `system:makefile`:
   - `make validate-index`

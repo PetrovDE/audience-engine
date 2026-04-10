@@ -1,6 +1,15 @@
 {% extends "operator/base.html" %}
 {% block content %}
 <section class="panel">
+  <h2>Quick Start</h2>
+  <ol class="quick-start">
+    <li>Review readiness below to confirm at least one runnable profile and delivery target.</li>
+    <li>Open <a href="/operator/defaults">Defaults</a> to choose governed runtime defaults.</li>
+    <li>Open <a href="/operator/trigger-run">Trigger Run</a> to launch a campaign run and monitor it in <a href="/operator/recent-runs">Recent Runs</a>.</li>
+  </ol>
+</section>
+
+<section class="panel">
   <h2>System Readiness Snapshot</h2>
   <div class="grid">
     <article class="stat-card">
@@ -31,6 +40,7 @@
 
 <section class="panel">
   <h2>Selected Defaults</h2>
+  <p class="quiet">Defaults are used by both API-triggered and UI-triggered runs unless overridden.</p>
   {% if defaults %}
   <dl class="kv">
     <dt>Default policy version</dt>
@@ -55,7 +65,44 @@
     </dd>
   </dl>
   {% else %}
-  <p class="empty">No defaults could be loaded from control-plane state.</p>
+  <p class="empty">No defaults are saved yet. Open <a href="/operator/defaults">Defaults</a> to set them before triggering runs.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Planned Integrations (Disabled)</h2>
+  {% set planned_profiles = integrations_payload.get("profiles", []) | rejectattr("implementation_status", "equalto", "implemented") | list %}
+  {% set planned_targets = delivery_targets | rejectattr("implementation_status", "equalto", "implemented") | list %}
+  {% if planned_profiles or planned_targets %}
+  <p class="quiet">These entries stay visible for planning context and are disabled in form selectors.</p>
+  <div class="grid">
+    <article class="stat-card">
+      <h3>Planned Profiles</h3>
+      {% if planned_profiles %}
+      <ul class="compact-list">
+        {% for row in planned_profiles %}
+        <li>{{ row.get("profile_id", "unknown_profile") }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty">No planned profiles.</p>
+      {% endif %}
+    </article>
+    <article class="stat-card">
+      <h3>Planned Delivery Targets</h3>
+      {% if planned_targets %}
+      <ul class="compact-list">
+        {% for row in planned_targets %}
+        <li>{{ row.get("delivery_target_id", "unknown_target") }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty">No planned delivery targets.</p>
+      {% endif %}
+    </article>
+  </div>
+  {% else %}
+  <p class="empty">No planned integrations are currently listed.</p>
   {% endif %}
 </section>
 
@@ -71,5 +118,8 @@
       For scheduled orchestration, use the DAG above and pass the same trigger parameters.
     </dd>
   </dl>
+  {% if not primary %}
+  <p class="empty">Operational model metadata is currently unavailable.</p>
+  {% endif %}
 </section>
 {% endblock %}

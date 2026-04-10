@@ -22,6 +22,9 @@ This will:
 ## Local Infra Env
 - Local compose uses `infra/.env.local` by default via `Makefile`.
 - Local Airflow bootstrap credentials are `admin / 203217` (dev-only convenience; not production-safe).
+- Local Operator Console login credentials are:
+  - `OPERATOR_UI_USERNAME=admin`
+  - `OPERATOR_UI_PASSWORD=203217`
 - For host-run embedding/retrieval commands, set `OLLAMA_BASE_URL=http://localhost:11434` if needed.
 - Retrieval/API RBAC is enabled via API keys in env:
   - `AE_CAMPAIGN_API_KEYS`
@@ -33,6 +36,13 @@ This will:
 
 ## Lint and Format
 ```bash
+uv run ruff check .
+uv run ruff format .
+```
+
+Optional Make targets:
+
+```bash
 make lint
 make format
 ```
@@ -40,24 +50,19 @@ make format
 ## Tests
 This section moved to the canonical testing guide: `docs/TESTING.md`.
 
-Unit tests:
-
-```bash
-make test
-```
-
-Integration tests:
-
-```bash
-make test-integration
-```
-
-Direct pytest usage via `uv` is also available:
+Run tests with `uv`:
 
 ```bash
 uv run pytest -q tests/unit
 uv run pytest -q tests/integration
 uv run pytest -q tests/integration/test_clickhouse_postgres_export_e2e.py
+```
+
+Optional Make targets:
+
+```bash
+make test
+make test-integration
 ```
 
 ## CI (GitHub Actions)
@@ -106,8 +111,16 @@ docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml build
 Run retrieval API locally:
 
 ```bash
+uv run --env-file infra/.env.local python -m uvicorn services.retrieval_api.app:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Optional Make target:
+
+```bash
 make retrieval-api
 ```
+
+Open the Operator Console at `http://localhost:8000/` and login with `OPERATOR_UI_USERNAME` / `OPERATOR_UI_PASSWORD` from env.
 
 Example calls with role-separated keys:
 ```bash

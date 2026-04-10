@@ -8,6 +8,8 @@ client = TestClient(app_module.app)
 
 CAMPAIGN_KEY = "campaign-test-key"
 ADMIN_KEY = "admin-test-key"
+OPERATOR_UI_USERNAME = "admin"
+OPERATOR_UI_PASSWORD = "203217"
 RUN_ID = "e0f62885-0dbc-4d53-b1d5-59fd0be558e2"
 
 
@@ -15,16 +17,25 @@ RUN_ID = "e0f62885-0dbc-4d53-b1d5-59fd0be558e2"
 def _auth_env(monkeypatch):
     monkeypatch.setenv("AE_CAMPAIGN_API_KEYS", CAMPAIGN_KEY)
     monkeypatch.setenv("AE_ADMIN_API_KEYS", ADMIN_KEY)
+    monkeypatch.setenv("OPERATOR_UI_USERNAME", OPERATOR_UI_USERNAME)
+    monkeypatch.setenv("OPERATOR_UI_PASSWORD", OPERATOR_UI_PASSWORD)
     client.cookies.clear()
 
 
 def _login() -> None:
     response = client.post(
         "/operator/login",
-        data={"api_key": ADMIN_KEY, "next": "/operator/dashboard"},
+        data={
+            "username": OPERATOR_UI_USERNAME,
+            "password": OPERATOR_UI_PASSWORD,
+            "next": "/operator/dashboard",
+        },
         follow_redirects=False,
     )
     assert response.status_code == 303
+    cookie_header = response.headers.get("set-cookie", "")
+    assert "ae_operator_session=" in cookie_header
+    assert ADMIN_KEY not in cookie_header
 
 
 def _patch_operator_catalog(monkeypatch) -> None:
@@ -163,12 +174,17 @@ def test_operator_ui_login_and_dashboard_smoke(monkeypatch):
     assert anon.status_code == 303
     assert anon.headers["location"].startswith("/operator/login")
 
+    root_redirect = client.get("/", follow_redirects=False)
+    assert root_redirect.status_code == 303
+    assert root_redirect.headers["location"] == "/operator"
+
     _login()
     response = client.get("/operator/dashboard")
     assert response.status_code == 200
     assert "System Readiness Snapshot" in response.text
     assert "audience_engine_operator_main" in response.text
     assert "policy_credit_v1" in response.text
+    assert "Audience Engine Operator Console" in response.text
 
 
 def test_operator_ui_defaults_submit_calls_control_plane(monkeypatch):

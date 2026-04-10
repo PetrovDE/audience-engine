@@ -117,7 +117,7 @@ minimal-slice:
 	$(UV_RUN) python -m pipelines.minimal_slice.run_flow
 
 retrieval-api:
-	$(UV_RUN) python -m uvicorn services.retrieval_api.app:app --host 0.0.0.0 --port 8000
+	$(UV_RUN) --env-file $(DEV_ENV_FILE) python -m uvicorn services.retrieval_api.app:app --host 127.0.0.1 --port 8000 --reload
 
 bench-small:
 	$(UV_RUN) python -m pipelines.minimal_slice.benchmark_harness --num-points 100000 --vector-size 384 --num-queries 200 --top-k 20 --batch-size 1000 --seed 42

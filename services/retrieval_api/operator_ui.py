@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
+import os
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -19,17 +22,14 @@ from pipelines.minimal_slice import (
 )
 from pipelines.minimal_slice.data_quality import DataQualityError
 from pipelines.minimal_slice.policy_decision_audit import fetch_policy_decision_audit
-from services.retrieval_api.auth import (
-    API_KEY_HEADER,
-    Principal,
-    rbac_is_configured,
-    resolve_admin_principal_from_api_key,
-)
+from services.retrieval_api.auth import Principal, Role
 
 MODULE_DIR = Path(__file__).resolve().parent
 OPERATOR_TEMPLATE_DIR = MODULE_DIR / "templates"
 OPERATOR_STATIC_DIR = MODULE_DIR / "static"
-OPERATOR_SESSION_COOKIE = "ae_operator_api_key"
+OPERATOR_SESSION_COOKIE = "ae_operator_session"
+OPERATOR_UI_USERNAME_ENV = "OPERATOR_UI_USERNAME"
+OPERATOR_UI_PASSWORD_ENV = "OPERATOR_UI_PASSWORD"
 DEFAULT_PAGE_SIZE = 20
 OPERATOR_DASHBOARD_PATH = "/operator/dashboard"
 
@@ -59,6 +59,43 @@ NAV_ITEMS = [
 ]
 
 
+def _load_operator_ui_credentials() -> tuple[str, str] | None:
+    username = os.getenv(OPERATOR_UI_USERNAME_ENV, "").strip()
+    password = os.getenv(OPERATOR_UI_PASSWORD_ENV, "").strip()
+    if not username or not password:
+        return None
+    return username, password
+
+
+def _operator_ui_auth_error() -> str | None:
+    if _load_operator_ui_credentials() is not None:
+        return None
+    return (
+        "Operator login is not configured. Set "
+        f"{OPERATOR_UI_USERNAME_ENV} and {OPERATOR_UI_PASSWORD_ENV}."
+    )
+
+
+def _session_cookie_value(username: str, password: str) -> str:
+    signature = hmac.new(
+        key=password.encode("utf-8"),
+        msg=username.encode("utf-8"),
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+    return f"{username}:{signature}"
+
+
+def _session_username_from_cookie(cookie_value: str | None) -> str | None:
+    credentials = _load_operator_ui_credentials()
+    if cookie_value is None or credentials is None:
+        return None
+    username, password = credentials
+    expected = _session_cookie_value(username=username, password=password)
+    if hmac.compare_digest(cookie_value, expected):
+        return username
+    return None
+
+
 def _safe_next_path(candidate: str | None) -> str:
     if not candidate:
         return OPERATOR_DASHBOARD_PATH
@@ -68,10 +105,12 @@ def _safe_next_path(candidate: str | None) -> str:
 
 
 def _signed_in_principal(request: Request) -> Principal | None:
-    cookie_key = request.cookies.get(OPERATOR_SESSION_COOKIE)
-    header_key = request.headers.get(API_KEY_HEADER)
-    api_key = cookie_key or header_key
-    return resolve_admin_principal_from_api_key(api_key)
+    username = _session_username_from_cookie(
+        request.cookies.get(OPERATOR_SESSION_COOKIE)
+    )
+    if username is None:
+        return None
+    return Principal(role=Role.ADMIN_OPERATOR, actor_id=f"operator_ui:{username}")
 
 
 def _redirect_to_login(request: Request) -> RedirectResponse:
@@ -212,8 +251,17 @@ def _coerce_positive_int(
 
 
 @OPERATOR_UI_ROUTER.get("/operator")
-def operator_root() -> RedirectResponse:
-    return RedirectResponse(url=OPERATOR_DASHBOARD_PATH, status_code=303)
+def operator_root(request: Request) -> RedirectResponse:
+    if _signed_in_principal(request) is not None:
+        return RedirectResponse(url=OPERATOR_DASHBOARD_PATH, status_code=303)
+    return RedirectResponse(url="/operator/login", status_code=303)
+
+
+@OPERATOR_UI_ROUTER.get("/")
+def root_redirect(request: Request) -> RedirectResponse:
+    if _signed_in_principal(request) is not None:
+        return RedirectResponse(url=OPERATOR_DASHBOARD_PATH, status_code=303)
+    return RedirectResponse(url="/operator", status_code=303)
 
 
 @OPERATOR_UI_ROUTER.get("/operator/login", response_class=HTMLResponse)
@@ -224,11 +272,12 @@ def operator_login_page(
     principal = _signed_in_principal(request)
     if principal is not None:
         return RedirectResponse(url=_safe_next_path(next), status_code=303)
+    auth_error = _operator_ui_auth_error()
     context = {
         "request": request,
         "next_path": _safe_next_path(next),
-        "rbac_configured": rbac_is_configured(),
-        "error_message": None,
+        "auth_configured": auth_error is None,
+        "error_message": auth_error,
     }
     return templates.TemplateResponse(request, "operator/login.html", context)
 
@@ -236,39 +285,39 @@ def operator_login_page(
 @OPERATOR_UI_ROUTER.post("/operator/login", response_class=HTMLResponse)
 def operator_login_submit(
     request: Request,
-    api_key: str = Form(...),
+    username: str = Form(...),
+    password: str = Form(...),
     next: str = Form(default=OPERATOR_DASHBOARD_PATH),
 ) -> Response:
     safe_next = _safe_next_path(next)
-    if not rbac_is_configured():
+    configured_credentials = _load_operator_ui_credentials()
+    if configured_credentials is None:
         return templates.TemplateResponse(
             request,
             "operator/login.html",
             {
                 "request": request,
                 "next_path": safe_next,
-                "rbac_configured": False,
-                "error_message": (
-                    "RBAC is not configured. Set AE_ADMIN_API_KEYS to use "
-                    "the operator console."
-                ),
+                "auth_configured": False,
+                "error_message": _operator_ui_auth_error(),
             },
             status_code=403,
         )
 
-    principal = resolve_admin_principal_from_api_key(api_key.strip())
-    if principal is None:
+    expected_username, expected_password = configured_credentials
+    submitted_username = username.strip()
+    if not (
+        hmac.compare_digest(submitted_username, expected_username)
+        and hmac.compare_digest(password, expected_password)
+    ):
         return templates.TemplateResponse(
             request,
             "operator/login.html",
             {
                 "request": request,
                 "next_path": safe_next,
-                "rbac_configured": True,
-                "error_message": (
-                    "Invalid admin API key. Use a key configured in "
-                    "AE_ADMIN_API_KEYS."
-                ),
+                "auth_configured": True,
+                "error_message": "Invalid username or password.",
             },
             status_code=401,
         )
@@ -276,7 +325,10 @@ def operator_login_submit(
     response = RedirectResponse(url=safe_next, status_code=303)
     response.set_cookie(
         key=OPERATOR_SESSION_COOKIE,
-        value=api_key.strip(),
+        value=_session_cookie_value(
+            username=expected_username,
+            password=expected_password,
+        ),
         httponly=True,
         samesite="lax",
         secure=request.url.scheme == "https",

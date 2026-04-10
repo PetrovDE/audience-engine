@@ -27,6 +27,15 @@ def test_healthz_smoke():
     assert body["version_bundle"] is None or isinstance(body["version_bundle"], dict)
 
 
+def test_metrics_endpoint_does_not_redirect():
+    bare = client.get("/metrics", follow_redirects=False)
+    slash = client.get("/metrics/", follow_redirects=False)
+    assert bare.status_code == 200
+    assert slash.status_code == 200
+    assert bare.headers.get("location") is None
+    assert "python_info" in bare.text or "# HELP" in bare.text
+
+
 def test_retrieve_requires_query():
     response = client.post(
         "/v1/retrieve",

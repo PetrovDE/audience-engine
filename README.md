@@ -42,7 +42,7 @@ Prereqs:
 - `uv`
 - Docker + Docker Compose
 - External Ollama runtime (default endpoint for host-run commands: `http://localhost:11434`)
-- Local bootstrap env: `infra/.env.local` (Airflow local login: `admin / 203217`, dev-only)
+- Local bootstrap env: `infra/.env.local` (dev-only defaults, including Operator UI login `admin / 203217`)
 
 From repo root:
 
@@ -79,6 +79,12 @@ End-to-end intent:
 Start API:
 
 ```bash
+uv run --env-file infra/.env.local python -m uvicorn services.retrieval_api.app:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Optional Make target:
+
+```bash
 make retrieval-api
 ```
 
@@ -89,12 +95,13 @@ The FastAPI service now includes a lightweight operator UI on top of existing ad
 Open in browser:
 
 ```text
-http://localhost:8000/operator
+http://localhost:8000/
 ```
 
 Login model:
-- Use an admin key from `AE_ADMIN_API_KEYS`.
-- No auth redesign is introduced; UI session uses the same API-key RBAC assumptions.
+- Use `OPERATOR_UI_USERNAME` / `OPERATOR_UI_PASSWORD` from env (local defaults: `admin` / `203217`).
+- UI uses a signed session cookie and does not store raw admin API keys in browser cookies.
+- Admin/campaign API routes stay RBAC-protected with `X-AE-API-Key` and `AE_*_API_KEYS`.
 
 Implemented UI sections:
 - Dashboard
@@ -235,6 +242,22 @@ make test-unit
 ## Testing and Benchmarks
 
 Tests:
+
+```bash
+uv run pytest -q tests/unit
+uv run pytest -q tests/contracts
+SKIP_GPU_TESTS=1 uv run pytest -q tests/integration/test_minimal_slice_smoke.py -k cpu
+SKIP_GPU_TESTS=0 uv run pytest -q tests/integration/test_minimal_slice_smoke.py -k gpu
+```
+
+Lint:
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+```
+
+Optional Make targets:
 
 ```bash
 make test-unit

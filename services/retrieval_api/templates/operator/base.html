@@ -9,14 +9,14 @@
 <body>
   <header class="topbar">
     <div>
-      <h1>Audience Engine Operator Console</h1>
-      <p>UI MVP over existing governed admin/control-plane APIs and runtime modules.</p>
+      <h1><a class="brand-link" href="/operator/dashboard">Audience Engine Operator Console</a></h1>
+      <p>Default local entrypoint for operators. UI login is username/password; API RBAC remains key-based.</p>
     </div>
     <div class="topbar-meta">
       {% if principal %}
-      <div class="principal-id">Signed in: {{ principal.actor_id }}</div>
+      <div class="principal-id">Signed in as {{ principal.actor_id }}</div>
       <form method="post" action="/operator/logout">
-        <button type="submit" class="button secondary">Sign Out</button>
+        <button type="submit" class="button secondary">Log Out</button>
       </form>
       {% endif %}
     </div>
@@ -34,7 +34,7 @@
       <section class="legend">
         <h2>Status Legend</h2>
         <p><span class="chip implemented">Implemented</span> Runtime-capable path in this build.</p>
-        <p><span class="chip planned">Planned</span> Visible only for roadmap transparency, not selectable in operator forms.</p>
+        <p><span class="chip planned">Planned</span> Visible for roadmap clarity and intentionally disabled in operator forms.</p>
       </section>
     </aside>
 

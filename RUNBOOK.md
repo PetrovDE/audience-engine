@@ -15,7 +15,7 @@ This runbook covers Prometheus + Grafana monitoring for:
 ## Bring-up
 1. Install Python dependencies:
    ```bash
-   pip install -r requirements.txt
+   uv sync --group runtime-retrieval-api --group runtime-minimal-slice --group dev --locked
    ```
 2. Start infra with monitoring:
    ```bash
@@ -23,11 +23,11 @@ This runbook covers Prometheus + Grafana monitoring for:
    ```
 3. Start retrieval API:
    ```bash
-   python -m uvicorn services.retrieval_api.app:app --host 0.0.0.0 --port 8000
+   uv run --env-file infra/.env.local python -m uvicorn services.retrieval_api.app:app --host 127.0.0.1 --port 8000 --reload
    ```
 4. (Optional but recommended) Run one pipeline flow to seed embedding/policy/freshness metrics:
    ```bash
-   python -m pipelines.minimal_slice.run_flow
+   uv run --env-file infra/.env.local python -m pipelines.minimal_slice.run_flow
    ```
 
 ## Grafana Dashboard
@@ -85,7 +85,7 @@ Symptoms:
 Checks:
 1. Run the minimal slice and inspect summary:
    ```bash
-   python -m pipelines.minimal_slice.run_flow
+   uv run --env-file infra/.env.local python -m pipelines.minimal_slice.run_flow
    type data\minimal_slice\run\run_summary.json
    ```
 2. Inspect blacklist and communication history inputs for drift.

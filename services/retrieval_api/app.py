@@ -2,9 +2,9 @@ import json
 from typing import Any, List, Optional
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.staticfiles import StaticFiles
-from prometheus_client import make_asgi_app
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 
 from pipelines.minimal_slice import (
@@ -28,13 +28,18 @@ from services.retrieval_api.auth import (
 from services.retrieval_api.operator_ui import OPERATOR_STATIC_DIR, OPERATOR_UI_ROUTER
 
 app = FastAPI(title="Audience Engine Retrieval API", version="0.1.0")
-app.mount("/metrics", make_asgi_app())
 app.mount(
     "/operator/static",
     StaticFiles(directory=OPERATOR_STATIC_DIR),
     name="operator_static",
 )
 app.include_router(OPERATOR_UI_ROUTER)
+
+
+@app.get("/metrics", include_in_schema=False)
+@app.get("/metrics/", include_in_schema=False)
+def metrics() -> Response:
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 class RetrieveRequest(BaseModel):
