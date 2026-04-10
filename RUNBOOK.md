@@ -31,6 +31,32 @@ This runbook covers Prometheus + Grafana monitoring for:
    uv run --env-file infra/.env.local python -m pipelines.minimal_slice.run_flow
    ```
 
+## Control Plane Registry Bootstrap (Dev/Test)
+Use the explicit bootstrap helper when registry tables are empty in local/dev test environments:
+
+```bash
+uv run --env-file infra/.env.local python -m pipelines.minimal_slice.control_plane_registry --bootstrap-dev-test
+```
+
+Preview what would be seeded without writing:
+
+```bash
+uv run --env-file infra/.env.local python -m pipelines.minimal_slice.control_plane_registry --bootstrap-dev-test --dry-run
+```
+
+The bootstrap path seeds only minimum active defaults required for run lineage resolution:
+- feature set version
+- model version
+- embedding provider model version
+- policy version
+- audience definition version
+
+## Strict Lineage Behavior
+- If a run provides explicit `*_version_id` inputs, lineage resolution is strict: missing/inactive/mismatched references fail preconditions before execution.
+- If explicit IDs are not provided and required active versions are missing, runs are marked `degraded_unversioned` (no silent fallback).
+- Degraded lineage markers are written into run operation context (`lineage_resolution_mode`, `lineage_resolution_reasons`) so the outcome is auditable.
+- Missing active versions are reported as `missing_required_active_versions:<field list>`.
+
 ## Grafana Dashboard
 - Login to Grafana with `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`.
 - Open folder `Audience Engine`.
