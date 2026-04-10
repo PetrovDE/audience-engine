@@ -1,0 +1,52 @@
+{% extends "operator/base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>Manage Operator Defaults</h2>
+  <p>Only implemented profiles/targets are selectable. Compatibility is validated on save.</p>
+  <form method="post" action="/operator/defaults" class="form-grid">
+    <label for="default_policy_version">Default policy version</label>
+    <select id="default_policy_version" name="default_policy_version" required>
+      {% for row in policies %}
+      <option value="{{ row.get('policy_version') }}" {% if defaults and defaults.default_policy_version == row.get('policy_version') %}selected{% endif %}>
+        {{ row.get("policy_version") }} {% if row.get("status") %}({{ row.get("status") }}){% endif %}
+      </option>
+      {% endfor %}
+    </select>
+
+    <label for="default_integration_profile_id">Default integration profile</label>
+    <select id="default_integration_profile_id" name="default_integration_profile_id" required>
+      {% for row in profiles %}
+      {% set selectable = row.get("implementation_status") == "implemented" %}
+      <option value="{{ row.get('profile_id') }}" {% if defaults and defaults.default_integration_profile_id == row.get('profile_id') %}selected{% endif %} {% if not selectable %}disabled{% endif %}>
+        {{ row.get("profile_id") }} [{{ row.get("implementation_status", "unknown") }}]
+      </option>
+      {% endfor %}
+    </select>
+
+    <label for="default_delivery_target_id">Default delivery target</label>
+    <select id="default_delivery_target_id" name="default_delivery_target_id" required>
+      {% for row in delivery_targets %}
+      {% set selectable = row.get("implementation_status") == "implemented" %}
+      <option value="{{ row.get('delivery_target_id') }}" {% if defaults and defaults.default_delivery_target_id == row.get('delivery_target_id') %}selected{% endif %} {% if not selectable %}disabled{% endif %}>
+        {{ row.get("delivery_target_id") }} [{{ row.get("implementation_status", "unknown") }}]
+      </option>
+      {% endfor %}
+    </select>
+
+    <button type="submit" class="button">Save Defaults</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Current Default State</h2>
+  {% if defaults %}
+  <pre>{{ {
+    "default_policy_version": defaults.default_policy_version,
+    "default_integration_profile_id": defaults.default_integration_profile_id,
+    "default_delivery_target_id": defaults.default_delivery_target_id
+  } | json_pretty }}</pre>
+  {% else %}
+  <p class="empty">No defaults loaded.</p>
+  {% endif %}
+</section>
+{% endblock %}

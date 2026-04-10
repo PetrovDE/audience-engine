@@ -1,0 +1,78 @@
+{% extends "operator/base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>Policy Explain Lookup</h2>
+  <form method="post" action="/operator/explain-audit" class="inline-form">
+    <label for="run_id">run_id</label>
+    <input id="run_id" name="run_id" type="text" value="{{ lookup_run_id }}" placeholder="UUID">
+    <label for="customer_id">customer_id</label>
+    <input id="customer_id" name="customer_id" type="text" value="{{ lookup_customer_id }}" placeholder="cust_00001">
+    <button type="submit" class="button">Lookup</button>
+  </form>
+  {% if decision %}
+  <pre>{{ decision | json_pretty }}</pre>
+  {% else %}
+  <p class="empty">Submit run_id + customer_id to load policy decision explain data.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Lifecycle Audit Summary</h2>
+  {% if lifecycle_actions %}
+  <table>
+    <thead>
+      <tr>
+        <th>action_ts</th>
+        <th>action</th>
+        <th>alias</th>
+        <th>outcome</th>
+        <th>actor</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in lifecycle_actions %}
+      <tr>
+        <td>{{ row.get("action_ts", "") }}</td>
+        <td>{{ row.get("action", "") }}</td>
+        <td>{{ row.get("alias_name", "") }}</td>
+        <td>{{ row.get("outcome", "") }}</td>
+        <td>{{ row.get("actor_id", "") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No lifecycle audit actions found.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Delivery Audit Summary</h2>
+  {% if delivery_attempts %}
+  <table>
+    <thead>
+      <tr>
+        <th>attempt_ts</th>
+        <th>run_id</th>
+        <th>delivery_job_id</th>
+        <th>status</th>
+        <th>details</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in delivery_attempts %}
+      <tr>
+        <td>{{ row.get("attempt_ts", "") }}</td>
+        <td>{{ row.get("run_id", "") }}</td>
+        <td>{{ row.get("delivery_job_id", "") }}</td>
+        <td>{{ row.get("attempt_status", "") }}</td>
+        <td><pre>{{ row.get("details") | json_pretty }}</pre></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No delivery audit attempts found.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,151 @@
+{% extends "operator/base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>Readiness Interpretation</h2>
+  <p><code>runtime_runnable=true</code> means operator-safe now. Readiness mode is displayed honestly:</p>
+  <ul>
+    <li><code>config_only</code>: config validation only.</li>
+    <li><code>config_and_connectivity</code>: config validation + live probe.</li>
+    <li><code>not_implemented</code>: planned or disabled for runtime use.</li>
+  </ul>
+</section>
+
+<section class="panel">
+  <h2>Integration Profiles</h2>
+  {% set profiles = integrations_payload.get("profiles", []) %}
+  {% if profiles %}
+  <table>
+    <thead>
+      <tr>
+        <th>profile_id</th>
+        <th>status</th>
+        <th>runnable</th>
+        <th>readiness_mode</th>
+        <th>validation_errors</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in profiles %}
+      <tr>
+        <td>{{ row.get("profile_id", "") }}</td>
+        <td>
+          <span class="chip {% if row.get('implementation_status') == 'implemented' %}implemented{% else %}planned{% endif %}">
+            {{ row.get("implementation_status", "unknown") }}
+          </span>
+        </td>
+        <td>{{ row.get("runtime_runnable") }}</td>
+        <td>{{ row.get("runtime_readiness_mode", "") }}</td>
+        <td><pre>{{ row.get("runtime_validation_errors") | json_pretty }}</pre></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No integration profiles available.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Source Connectors</h2>
+  {% set sources = integrations_payload.get("sources", []) %}
+  {% if sources %}
+  <table>
+    <thead>
+      <tr>
+        <th>source_id</th>
+        <th>status</th>
+        <th>runnable</th>
+        <th>readiness_mode</th>
+        <th>validation_errors</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in sources %}
+      <tr>
+        <td>{{ row.get("source_id", "") }}</td>
+        <td>
+          <span class="chip {% if row.get('implementation_status') == 'implemented' %}implemented{% else %}planned{% endif %}">
+            {{ row.get("implementation_status", "unknown") }}
+          </span>
+        </td>
+        <td>{{ row.get("runtime_runnable") }}</td>
+        <td>{{ row.get("runtime_readiness_mode", "") }}</td>
+        <td><pre>{{ row.get("runtime_validation_errors") | json_pretty }}</pre></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No source connectors available.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Export Targets</h2>
+  {% set exports = integrations_payload.get("exports", []) %}
+  {% if exports %}
+  <table>
+    <thead>
+      <tr>
+        <th>export_id</th>
+        <th>status</th>
+        <th>runnable</th>
+        <th>readiness_mode</th>
+        <th>validation_errors</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in exports %}
+      <tr>
+        <td>{{ row.get("export_id", "") }}</td>
+        <td>
+          <span class="chip {% if row.get('implementation_status') == 'implemented' %}implemented{% else %}planned{% endif %}">
+            {{ row.get("implementation_status", "unknown") }}
+          </span>
+        </td>
+        <td>{{ row.get("runtime_runnable") }}</td>
+        <td>{{ row.get("runtime_readiness_mode", "") }}</td>
+        <td><pre>{{ row.get("runtime_validation_errors") | json_pretty }}</pre></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No export targets available.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Delivery Targets</h2>
+  {% if delivery_targets %}
+  <table>
+    <thead>
+      <tr>
+        <th>delivery_target_id</th>
+        <th>status</th>
+        <th>runnable</th>
+        <th>readiness_mode</th>
+        <th>validation_errors</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in delivery_targets %}
+      <tr>
+        <td>{{ row.get("delivery_target_id", "") }}</td>
+        <td>
+          <span class="chip {% if row.get('implementation_status') == 'implemented' %}implemented{% else %}planned{% endif %}">
+            {{ row.get("implementation_status", "unknown") }}
+          </span>
+        </td>
+        <td>{{ row.get("runtime_runnable") }}</td>
+        <td>{{ row.get("runtime_readiness_mode", "") }}</td>
+        <td><pre>{{ row.get("runtime_validation_errors") | json_pretty }}</pre></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No delivery targets available.</p>
+  {% endif %}
+</section>
+{% endblock %}

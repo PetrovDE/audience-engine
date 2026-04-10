@@ -1,0 +1,48 @@
+{% extends "operator/base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>Recent Runs</h2>
+  <form method="get" action="/operator/recent-runs" class="inline-form">
+    <label for="limit">Limit</label>
+    <input id="limit" name="limit" type="number" min="1" max="200" value="{{ limit }}">
+    <button type="submit" class="button secondary">Refresh</button>
+  </form>
+  {% if runs %}
+  <table>
+    <thead>
+      <tr>
+        <th>event_ts</th>
+        <th>status</th>
+        <th>run_id</th>
+        <th>campaign_id</th>
+        <th>policy</th>
+        <th>integration</th>
+        <th>delivery</th>
+        <th>summary</th>
+        <th>last_failure</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in runs %}
+      <tr>
+        <td>{{ row.get("event_ts", "") }}</td>
+        <td>{{ row.get("status", "") }}</td>
+        <td>{{ row.get("run_id", "") }}</td>
+        <td>{{ row.get("campaign_id", "") }}</td>
+        <td>{{ row.get("policy_version", "") }}</td>
+        <td>{{ row.get("integration_profile_id", "") }}</td>
+        <td>{{ row.get("delivery_target_id", "") }}</td>
+        <td>
+          export={{ row.get("export_status", "") }}<br>
+          delivery={{ row.get("delivery_status", "") }}
+        </td>
+        <td><pre>{{ row.get("error") | json_pretty }}</pre></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No run events found yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -82,6 +82,34 @@ Start API:
 make retrieval-api
 ```
 
+### Operator Console (implemented MVP)
+
+The FastAPI service now includes a lightweight operator UI on top of existing admin/control-plane endpoints and runtime modules.
+
+Open in browser:
+
+```text
+http://localhost:8000/operator
+```
+
+Login model:
+- Use an admin key from `AE_ADMIN_API_KEYS`.
+- No auth redesign is introduced; UI session uses the same API-key RBAC assumptions.
+
+Implemented UI sections:
+- Dashboard
+- Defaults
+- Trigger Run
+- Recent Runs
+- Delivery
+- Explain / Audit
+- Integrations / Readiness
+
+Honesty rules in UI:
+- Planned connectors/targets remain visible but non-selectable for defaults/run triggers.
+- Readiness mode is explicit (`config_only` vs `config_and_connectivity` vs `not_implemented`).
+- No fake/demo data is injected; all views render live backend structures or explicit empty states.
+
 Retrieve credit candidates:
 
 ```bash

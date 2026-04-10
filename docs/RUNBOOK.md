@@ -8,61 +8,43 @@ Host/bootstrap deployment steps moved to `docs/DEPLOYMENT.md`.
 ## Operator Workflow (Primary)
 Use this sequence for operational usage.
 
-1. Inspect control model and current defaults:
-   ```bash
-   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" http://localhost:8000/v1/admin/control-plane/model
-   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" http://localhost:8000/v1/admin/control-plane/defaults
+1. Open the operator UI in browser:
+   ```text
+   http://localhost:8000/operator
    ```
-2. Inspect implemented integrations and policies:
-   ```bash
-   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" "http://localhost:8000/v1/admin/control-plane/integrations?include_planned=false"
-   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" http://localhost:8000/v1/admin/control-plane/policies
-   ```
-   Readiness interpretation:
-   - `runtime_runnable=true` is the operator-safe gate.
-   - For `runtime_readiness_mode=config_and_connectivity`, both config and a live lightweight connectivity probe succeeded.
-   - For `runtime_readiness_mode=config_only`, config validation passed and no network probe is required for that connector type.
-3. (Optional) Update operator defaults:
-   ```bash
-   curl -X PUT -H "X-AE-API-Key: ${AE_ADMIN_KEY}" -H "Content-Type: application/json" \
-     -d '{"default_policy_version":"policy_credit_v1","default_integration_profile_id":"clickhouse_postgres_export","default_delivery_target_id":"crm_postgres_outbox"}' \
-     http://localhost:8000/v1/admin/control-plane/defaults
-   ```
-4. Trigger main run (policy/profile can be overridden per run):
-   ```bash
-   curl -X POST -H "X-AE-API-Key: ${AE_ADMIN_KEY}" -H "Content-Type: application/json" \
-     -d '{"campaign_id":"camp_ops_001","policy_version":"policy_credit_v1","integration_profile_id":"clickhouse_postgres_export","requested_size":20}' \
-     http://localhost:8000/v1/admin/runs/trigger
-   ```
-   API-triggered runs and Airflow-triggered runs are separate orchestrators over the same governed runtime modules.
-5. Monitor run and export status:
-   ```bash
-   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" http://localhost:8000/v1/admin/runs/latest-summary
-   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" "http://localhost:8000/v1/admin/runs/recent?limit=20"
-   ```
-   For `postgres_export_table`, summary export metadata includes:
-   - `rows_attempted`: approved rows attempted for staging insert.
-   - `rows_written`: actually inserted rows.
-   - `rows_skipped_conflict`: duplicate `(run_id, customer_id)` rows skipped by idempotent conflict handling.
-6. Inspect lifecycle and policy audit if needed:
-   ```bash
-   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" "http://localhost:8000/v1/admin/index/lifecycle-audit?limit=20"
-   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" http://localhost:8000/v1/policy/decisions/<run_id>/<customer_id>
-   ```
-7. Inspect delivery target readiness and per-run delivery details:
-   ```bash
-   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" \
-     http://localhost:8000/v1/admin/control-plane/delivery-targets
+2. Login with an admin API key from `AE_ADMIN_API_KEYS`.
+3. Use **Dashboard** and **Integrations / Readiness** to inspect:
+   - integration readiness
+   - delivery target readiness
+   - selected defaults
+   - main Airflow DAG id (`audience_engine_operator_main`) and usage hints
+4. Use **Defaults** to update:
+   - `default_policy_version`
+   - `default_integration_profile_id`
+   - `default_delivery_target_id`
+5. Use **Trigger Run** to launch a run with:
+   - `campaign_id` (required)
+   - optional overrides for policy/profile/delivery
+   - `requested_size`
+6. Use **Recent Runs** and **Delivery** to monitor:
+   - run status and selected lineage controls
+   - delivery jobs/attempts by run id or recent stream
+   - rows attempted/written/skipped-conflict where available
+7. Use **Explain / Audit** for:
+   - policy decision explain lookup (`run_id + customer_id`)
+   - lifecycle audit summary
+   - delivery attempt audit summary
 
-   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" \
-     "http://localhost:8000/v1/admin/delivery/jobs/recent?limit=20"
+Readiness interpretation:
+- `runtime_runnable=true` is the operator-safe gate.
+- `runtime_readiness_mode=config_and_connectivity` means config + probe both succeeded.
+- `runtime_readiness_mode=config_only` means config validation passed and no probe is required.
+- `runtime_readiness_mode=not_implemented` remains visible for roadmap honesty and is non-selectable in defaults/run-trigger forms.
 
-   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" \
-     "http://localhost:8000/v1/admin/delivery/attempts/recent?limit=50"
-
-   curl -H "X-AE-API-Key: ${AE_ADMIN_KEY}" \
-     http://localhost:8000/v1/admin/delivery/runs/<run_id>/latest-summary
-   ```
+API/DAG-only notes (still implemented and supported):
+- Index lifecycle mutate operations (`validate/promote/rollback`) are API/system-path operations, not UI actions.
+- Direct delivery trigger endpoint (`POST /v1/admin/delivery/trigger`) remains API-driven.
+- Airflow-triggered runs and API/UI-triggered runs are separate orchestrators over shared governed runtime modules.
 
 ## Audit Sink Bring-up
 1. Start infra:

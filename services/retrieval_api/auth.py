@@ -33,6 +33,11 @@ def _configured_api_keys() -> tuple[set[str], set[str]]:
     return campaign_keys, admin_keys
 
 
+def rbac_is_configured() -> bool:
+    campaign_keys, admin_keys = _configured_api_keys()
+    return bool(campaign_keys or admin_keys)
+
+
 def _key_fingerprint(api_key: str) -> str:
     digest = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
     return digest[:12]
@@ -53,6 +58,19 @@ def _resolve_principal(api_key: str) -> Principal | None:
     return None
 
 
+def resolve_principal_from_api_key(api_key: str | None) -> Principal | None:
+    if not api_key:
+        return None
+    return _resolve_principal(api_key)
+
+
+def resolve_admin_principal_from_api_key(api_key: str | None) -> Principal | None:
+    principal = resolve_principal_from_api_key(api_key)
+    if principal is None or principal.role != Role.ADMIN_OPERATOR:
+        return None
+    return principal
+
+
 def _raise_auth_not_configured() -> None:
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -66,8 +84,7 @@ def _raise_auth_not_configured() -> None:
 def require_campaign_or_admin(
     x_ae_api_key: str | None = Header(default=None, alias=API_KEY_HEADER),
 ) -> Principal:
-    campaign_keys, admin_keys = _configured_api_keys()
-    if not campaign_keys and not admin_keys:
+    if not rbac_is_configured():
         _raise_auth_not_configured()
 
     if not x_ae_api_key:
@@ -76,7 +93,7 @@ def require_campaign_or_admin(
             detail=f"Missing API key header: {API_KEY_HEADER}",
         )
 
-    principal = _resolve_principal(x_ae_api_key)
+    principal = resolve_principal_from_api_key(x_ae_api_key)
     if principal is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

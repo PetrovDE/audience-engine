@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page_title }} | Audience Engine Operator Console</title>
+  <link rel="stylesheet" href="{{ url_for('operator_static', path='operator.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Audience Engine Operator Console</h1>
+      <p>UI MVP over existing governed admin/control-plane APIs and runtime modules.</p>
+    </div>
+    <div class="topbar-meta">
+      {% if principal %}
+      <div class="principal-id">Signed in: {{ principal.actor_id }}</div>
+      <form method="post" action="/operator/logout">
+        <button type="submit" class="button secondary">Sign Out</button>
+      </form>
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <nav>
+        {% for item in nav_items %}
+        <a href="{{ item.path }}" class="nav-link {% if active_nav == item.path %}active{% endif %}">
+          {{ item.label }}
+        </a>
+        {% endfor %}
+      </nav>
+      <section class="legend">
+        <h2>Status Legend</h2>
+        <p><span class="chip implemented">Implemented</span> Runtime-capable path in this build.</p>
+        <p><span class="chip planned">Planned</span> Visible only for roadmap transparency, not selectable in operator forms.</p>
+      </section>
+    </aside>
+
+    <main class="content">
+      {% if notice %}
+      <div class="alert notice">{{ notice }}</div>
+      {% endif %}
+      {% if error_message %}
+      <div class="alert error"><pre>{{ error_message }}</pre></div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

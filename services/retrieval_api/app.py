@@ -3,6 +3,7 @@ from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import make_asgi_app
 from pydantic import BaseModel, Field
 
@@ -24,9 +25,16 @@ from services.retrieval_api.auth import (
     require_admin,
     require_campaign_or_admin,
 )
+from services.retrieval_api.operator_ui import OPERATOR_STATIC_DIR, OPERATOR_UI_ROUTER
 
 app = FastAPI(title="Audience Engine Retrieval API", version="0.1.0")
 app.mount("/metrics", make_asgi_app())
+app.mount(
+    "/operator/static",
+    StaticFiles(directory=OPERATOR_STATIC_DIR),
+    name="operator_static",
+)
+app.include_router(OPERATOR_UI_ROUTER)
 
 
 class RetrieveRequest(BaseModel):

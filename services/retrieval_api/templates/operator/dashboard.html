@@ -1,0 +1,75 @@
+{% extends "operator/base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>System Readiness Snapshot</h2>
+  <div class="grid">
+    <article class="stat-card">
+      <h3>Sources</h3>
+      {% set sources = integrations_payload.get("sources", []) %}
+      <p>{{ sources|length }} total</p>
+      <p>{{ sources | selectattr("runtime_runnable") | list | length }} runnable</p>
+    </article>
+    <article class="stat-card">
+      <h3>Exports</h3>
+      {% set exports = integrations_payload.get("exports", []) %}
+      <p>{{ exports|length }} total</p>
+      <p>{{ exports | selectattr("runtime_runnable") | list | length }} runnable</p>
+    </article>
+    <article class="stat-card">
+      <h3>Profiles</h3>
+      {% set profiles = integrations_payload.get("profiles", []) %}
+      <p>{{ profiles|length }} total</p>
+      <p>{{ profiles | selectattr("runtime_runnable") | list | length }} runnable</p>
+    </article>
+    <article class="stat-card">
+      <h3>Delivery Targets</h3>
+      <p>{{ delivery_targets|length }} total</p>
+      <p>{{ delivery_targets | selectattr("runtime_runnable") | list | length }} runnable</p>
+    </article>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Selected Defaults</h2>
+  {% if defaults %}
+  <dl class="kv">
+    <dt>Default policy version</dt>
+    <dd>{{ defaults.default_policy_version }}</dd>
+    <dt>Default integration profile</dt>
+    <dd>
+      {{ defaults.default_integration_profile_id }}
+      {% if default_profile %}
+      <span class="chip {% if default_profile.get('implementation_status') == 'implemented' %}implemented{% else %}planned{% endif %}">
+        {{ default_profile.get("implementation_status", "unknown") }}
+      </span>
+      {% endif %}
+    </dd>
+    <dt>Default delivery target</dt>
+    <dd>
+      {{ defaults.default_delivery_target_id }}
+      {% if default_delivery_target %}
+      <span class="chip {% if default_delivery_target.get('implementation_status') == 'implemented' %}implemented{% else %}planned{% endif %}">
+        {{ default_delivery_target.get("implementation_status", "unknown") }}
+      </span>
+      {% endif %}
+    </dd>
+  </dl>
+  {% else %}
+  <p class="empty">No defaults could be loaded from control-plane state.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Operator DAG</h2>
+  {% set primary = model.get("primary_operator_pipeline_entrypoint", {}) %}
+  <dl class="kv">
+    <dt>Main DAG id</dt>
+    <dd>{{ primary.get("airflow_dag_id", "unknown") }}</dd>
+    <dt>Usage hint</dt>
+    <dd>
+      UI-triggered runs use the same governed runtime as API/DAG orchestration.
+      For scheduled orchestration, use the DAG above and pass the same trigger parameters.
+    </dd>
+  </dl>
+</section>
+{% endblock %}
