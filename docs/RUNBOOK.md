@@ -8,6 +8,12 @@ Host/bootstrap deployment steps moved to `docs/DEPLOYMENT.md`.
 ## Operator Workflow (Primary)
 Use this sequence for operational usage.
 
+Canonical local API/UI startup from repo root:
+```bash
+uv run --env-file infra/.env.local python -m uvicorn services.retrieval_api.app:app --host 0.0.0.0 --port 8000 --reload
+```
+This `--env-file` load is required so Operator Console credentials are read from `infra/.env.local`.
+
 1. Open the operator UI in browser:
    ```text
    http://localhost:8000/

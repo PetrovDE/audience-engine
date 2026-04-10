@@ -23,8 +23,9 @@ This runbook covers Prometheus + Grafana monitoring for:
    ```
 3. Start retrieval API:
    ```bash
-   uv run --env-file infra/.env.local python -m uvicorn services.retrieval_api.app:app --host 127.0.0.1 --port 8000 --reload
+   uv run --env-file infra/.env.local python -m uvicorn services.retrieval_api.app:app --host 0.0.0.0 --port 8000 --reload
    ```
+   This `--env-file` load is required for local Operator Console login bootstrap (`OPERATOR_UI_USERNAME` / `OPERATOR_UI_PASSWORD` from `infra/.env.local`).
 4. (Optional but recommended) Run one pipeline flow to seed embedding/policy/freshness metrics:
    ```bash
    uv run --env-file infra/.env.local python -m pipelines.minimal_slice.run_flow

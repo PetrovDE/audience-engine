@@ -111,7 +111,7 @@ docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml build
 Run retrieval API locally:
 
 ```bash
-uv run --env-file infra/.env.local python -m uvicorn services.retrieval_api.app:app --host 127.0.0.1 --port 8000 --reload
+uv run --env-file infra/.env.local python -m uvicorn services.retrieval_api.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Optional Make target:
@@ -120,7 +120,7 @@ Optional Make target:
 make retrieval-api
 ```
 
-Open the Operator Console at `http://localhost:8000/` and login with `OPERATOR_UI_USERNAME` / `OPERATOR_UI_PASSWORD` from env.
+Open the Operator Console at `http://localhost:8000/` and login with `OPERATOR_UI_USERNAME` / `OPERATOR_UI_PASSWORD` from `infra/.env.local` loaded into the API process.
 
 Example calls with role-separated keys:
 ```bash

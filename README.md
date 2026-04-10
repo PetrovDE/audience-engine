@@ -79,7 +79,7 @@ End-to-end intent:
 Start API:
 
 ```bash
-uv run --env-file infra/.env.local python -m uvicorn services.retrieval_api.app:app --host 127.0.0.1 --port 8000 --reload
+uv run --env-file infra/.env.local python -m uvicorn services.retrieval_api.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Optional Make target:
@@ -99,6 +99,7 @@ http://localhost:8000/
 ```
 
 Login model:
+- Local operator bootstrap requires loading `infra/.env.local` into the API process (for example, via `--env-file infra/.env.local` or `make retrieval-api`).
 - Use `OPERATOR_UI_USERNAME` / `OPERATOR_UI_PASSWORD` from env (local defaults: `admin` / `203217`).
 - UI uses a signed session cookie and does not store raw admin API keys in browser cookies.
 - Admin/campaign API routes stay RBAC-protected with `X-AE-API-Key` and `AE_*_API_KEYS`.
