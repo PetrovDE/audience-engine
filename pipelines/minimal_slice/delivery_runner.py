@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from . import delivery_registry, delivery_store, delivery_targets
+from . import control_plane, delivery_registry, delivery_store, delivery_targets
 from .delivery_contract import sort_staged_rows
 
 
@@ -28,9 +28,37 @@ def execute_delivery_for_run(
     adapter.validate_config()
 
     campaign_id = delivery_store.resolve_run_campaign_id(run_id)
-    staged_rows = sort_staged_rows(delivery_store.fetch_staged_audience_rows(run_id))
-    now = datetime.now(timezone.utc)
+    run_export_id = delivery_store.resolve_run_export_target_id(run_id)
+    if run_export_id:
+        export_target = next(
+            (
+                row
+                for row in control_plane.list_export_targets(include_planned=True)
+                if row.get("export_id") == run_export_id
+            ),
+            None,
+        )
+        if export_target is None:
+            raise ValueError(f"Unknown export target in run lineage: {run_export_id}")
+        delivery_registry.ensure_delivery_target_compatible_with_export(
+            delivery_target_id,
+            export_target=export_target,
+            selection_kind="Selected",
+        )
 
+    staged_rows = sort_staged_rows(delivery_store.fetch_staged_audience_rows(run_id))
+    if delivery_target_id == "crm_postgres_outbox":
+        return delivery_store.execute_crm_postgres_outbox_delivery_atomic(
+            run_id=run_id,
+            campaign_id=campaign_id,
+            delivery_target_id=delivery_target_id,
+            trigger_source=trigger_source,
+            requested_by_role=requested_by_role,
+            requested_by_id=requested_by_id,
+            staged_rows=staged_rows,
+        )
+
+    now = datetime.now(timezone.utc)
     job = delivery_store.create_delivery_job(
         run_id=run_id,
         campaign_id=campaign_id,
@@ -50,6 +78,39 @@ def execute_delivery_for_run(
         details={"source_row_count": len(staged_rows)},
         attempt_ts=now,
     )
+    if not staged_rows:
+        completed_at = datetime.now(timezone.utc)
+        final_status = "skipped_no_source_rows"
+        delivery_store.complete_delivery_job(
+            delivery_job_id=delivery_job_id,
+            status=final_status,
+            rows_delivered=0,
+            rows_skipped_conflict=0,
+            error_detail="No staged rows found in audience_export_staging for run",
+            completed_at=completed_at,
+        )
+        delivery_store.append_delivery_attempt(
+            delivery_job_id=delivery_job_id,
+            run_id=run_id,
+            campaign_id=campaign_id,
+            delivery_target_id=delivery_target_id,
+            attempt_status=final_status,
+            details={"reason": "no_source_rows_in_staging"},
+            attempt_ts=completed_at,
+        )
+        return {
+            "delivery_job_id": delivery_job_id,
+            "run_id": run_id,
+            "campaign_id": campaign_id,
+            "delivery_target_id": delivery_target_id,
+            "status": final_status,
+            "source_row_count": 0,
+            "rows_materialized": 0,
+            "rows_delivered": 0,
+            "rows_skipped_conflict": 0,
+            "artifact_uri": None,
+            "completed_at": completed_at.isoformat(),
+        }
 
     try:
         materialized_at = datetime.now(timezone.utc)
@@ -81,34 +142,18 @@ def execute_delivery_for_run(
         )
 
         delivered_at = datetime.now(timezone.utc)
-        if delivery_target_id == "crm_postgres_outbox":
-            inserted_customer_ids = materialization.inserted_customer_ids or set()
-            record_meta = delivery_store.insert_delivery_records(
-                rows=staged_rows,
-                delivery_target_id=delivery_target_id,
-                delivery_job_id=delivery_job_id,
-                delivery_status="delivered",
-                delivery_artifact_uri=materialization.artifact_uri,
-                materialized_ts=materialized_at,
-                delivered_ts=delivered_at,
-                target_payload_by_customer=materialization.target_payload_by_customer,
-                customer_id_filter=inserted_customer_ids,
-            )
-            rows_delivered = int(record_meta["rows_written"])
-            rows_skipped_conflict = int(materialization.rows_skipped_conflict)
-        else:
-            record_meta = delivery_store.insert_delivery_records(
-                rows=staged_rows,
-                delivery_target_id=delivery_target_id,
-                delivery_job_id=delivery_job_id,
-                delivery_status="delivered",
-                delivery_artifact_uri=materialization.artifact_uri,
-                materialized_ts=materialized_at,
-                delivered_ts=delivered_at,
-                target_payload_by_customer=materialization.target_payload_by_customer,
-            )
-            rows_delivered = int(record_meta["rows_written"])
-            rows_skipped_conflict = int(record_meta["rows_skipped_conflict"])
+        record_meta = delivery_store.insert_delivery_records(
+            rows=staged_rows,
+            delivery_target_id=delivery_target_id,
+            delivery_job_id=delivery_job_id,
+            delivery_status="delivered",
+            delivery_artifact_uri=materialization.artifact_uri,
+            materialized_ts=materialized_at,
+            delivered_ts=delivered_at,
+            target_payload_by_customer=materialization.target_payload_by_customer,
+        )
+        rows_delivered = int(record_meta["rows_written"])
+        rows_skipped_conflict = int(record_meta["rows_skipped_conflict"])
 
         if staged_rows and rows_delivered == 0 and rows_skipped_conflict > 0:
             final_status = "skipped_conflict"

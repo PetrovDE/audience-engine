@@ -159,14 +159,6 @@ def _ensure_known_policy(policy_version: str) -> None:
         raise ValueError(f"Unknown policy_version: {policy_version}")
 
 
-def _default_profile_id() -> str:
-    for profile in list_integration_profiles(include_planned=False):
-        profile_id = profile.get("profile_id")
-        if profile_id:
-            return str(profile_id)
-    raise ValueError("No implemented integration profiles found")
-
-
 def _default_policy_version() -> str:
     active = _active_policy_versions()
     if active:
@@ -174,11 +166,48 @@ def _default_policy_version() -> str:
     return POLICY_VERSION
 
 
+def _default_profile_and_delivery_target() -> tuple[str, str]:
+    profiles = [
+        row
+        for row in list_integration_profiles(include_planned=False)
+        if str(row.get("profile_id", "")).strip()
+    ]
+    targets = [
+        row
+        for row in list_delivery_targets(include_planned=False)
+        if str(row.get("delivery_target_id", "")).strip()
+    ]
+    for profile in profiles:
+        profile_id = str(profile["profile_id"])
+        export_id = str(profile.get("export_id", "")).strip()
+        if not export_id:
+            continue
+        try:
+            export_target = _connector_by_id("export", export_id)
+        except ValueError:
+            continue
+        for target in targets:
+            delivery_target_id = str(target["delivery_target_id"])
+            try:
+                delivery_registry.ensure_delivery_target_compatible_with_export(
+                    delivery_target_id,
+                    export_target=export_target,
+                    selection_kind="Default",
+                )
+            except ValueError:
+                continue
+            return profile_id, delivery_target_id
+    raise ValueError(
+        "No compatible implemented integration profile and delivery target pair found"
+    )
+
+
 def _fallback_defaults() -> OperatorDefaults:
+    profile_id, delivery_target_id = _default_profile_and_delivery_target()
     return OperatorDefaults(
         default_policy_version=_default_policy_version(),
-        default_integration_profile_id=_default_profile_id(),
-        default_delivery_target_id=delivery_registry.default_delivery_target_id(),
+        default_integration_profile_id=profile_id,
+        default_delivery_target_id=delivery_target_id,
     )
 
 
@@ -227,6 +256,22 @@ def load_operator_defaults() -> OperatorDefaults:
     except ValueError:
         candidate_delivery = fallback.default_delivery_target_id
 
+    profile = _ensure_selectable_integration_profile(
+        candidate_profile,
+        require_implemented=True,
+        selection_kind="Default",
+    )
+    export_target = _connector_by_id("export", str(profile.get("export_id", "")).strip())
+    try:
+        delivery_registry.ensure_delivery_target_compatible_with_export(
+            candidate_delivery,
+            export_target=export_target,
+            selection_kind="Default",
+        )
+    except ValueError:
+        candidate_profile = fallback.default_integration_profile_id
+        candidate_delivery = fallback.default_delivery_target_id
+
     return OperatorDefaults(
         default_policy_version=candidate_policy,
         default_integration_profile_id=candidate_profile,
@@ -258,13 +303,19 @@ def save_operator_defaults(
     )
 
     _ensure_known_policy(resolved_policy)
-    _ensure_selectable_integration_profile(
+    profile = _ensure_selectable_integration_profile(
         resolved_profile,
         require_implemented=True,
         selection_kind="Default",
     )
     delivery_registry.ensure_selectable_delivery_target(
         resolved_delivery_target,
+        selection_kind="Default",
+    )
+    export_target = _connector_by_id("export", str(profile.get("export_id", "")).strip())
+    delivery_registry.ensure_delivery_target_compatible_with_export(
+        resolved_delivery_target,
+        export_target=export_target,
         selection_kind="Default",
     )
 
@@ -337,6 +388,11 @@ def resolve_run_configuration(
         raise ValueError(f"Source connector is not implemented: {source_id}")
     if export.get("implementation_status") != "implemented":
         raise ValueError(f"Export target is not implemented: {export_id}")
+    delivery_registry.ensure_delivery_target_compatible_with_export(
+        resolved_delivery_target_id,
+        export_target=export,
+        selection_kind="Selected",
+    )
 
     return OperationalRunConfig(
         policy_version=resolved_policy,
@@ -389,6 +445,10 @@ def describe_operational_model() -> dict[str, Any]:
             ),
             "default_delivery_target_id": (
                 "must reference an implemented delivery target"
+            ),
+            "default_profile_delivery_compatibility": (
+                "selected delivery target must be compatible with selected "
+                "integration export target"
             ),
         },
         "operator_facing_dags": [OPERATOR_MAIN_DAG_ID],

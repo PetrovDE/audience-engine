@@ -115,6 +115,44 @@ def resolve_run_campaign_id(run_id: str) -> str:
     return campaign_id
 
 
+def resolve_run_export_target_id(run_id: str) -> str | None:
+    run_uuid = _ensure_uuid(run_id, field="run_id")
+    psycopg, _ = _psycopg()
+    with psycopg.connect(_postgres_conninfo()) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    COALESCE(parameters->'operation_context'->>'export_id', ''),
+                    COALESCE(parameters->'operation_context'->>'integration_profile_id', '')
+                FROM audience_run
+                WHERE run_id = %s::uuid
+                """,
+                (run_uuid,),
+            )
+            row = cur.fetchone()
+            if row is not None:
+                export_id = str(row[0] or "").strip()
+                if export_id:
+                    return export_id
+
+            cur.execute(
+                """
+                SELECT export_target_id
+                FROM audience_export_staging
+                WHERE run_id = %s::uuid
+                ORDER BY rank ASC, customer_id ASC
+                LIMIT 1
+                """,
+                (run_uuid,),
+            )
+            staged_row = cur.fetchone()
+    if staged_row is None:
+        return None
+    export_id = str(staged_row[0] or "").strip()
+    return export_id or None
+
+
 def fetch_staged_audience_rows(run_id: str) -> list[StagedAudienceRow]:
     run_uuid = _ensure_uuid(run_id, field="run_id")
     psycopg, dict_row = _psycopg()
@@ -565,6 +603,549 @@ def write_crm_postgres_outbox(
         "rows_skipped_conflict": max(rows_attempted - rows_written, 0),
         "inserted_customer_ids": inserted_customer_ids,
     }
+
+
+def execute_crm_postgres_outbox_delivery_atomic(
+    *,
+    run_id: str,
+    campaign_id: str,
+    delivery_target_id: str,
+    trigger_source: str,
+    requested_by_role: str,
+    requested_by_id: str,
+    staged_rows: list[StagedAudienceRow],
+) -> dict[str, Any]:
+    if delivery_target_id != "crm_postgres_outbox":
+        raise ValueError(
+            "execute_crm_postgres_outbox_delivery_atomic only supports "
+            "delivery_target_id='crm_postgres_outbox'"
+        )
+
+    run_uuid = _ensure_uuid(run_id, field="run_id")
+    job_id = str(uuid4())
+    started_at = datetime.now(timezone.utc)
+    source_row_count = len(staged_rows)
+    psycopg, _ = _psycopg()
+
+    try:
+        with psycopg.connect(_postgres_conninfo()) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO audience_delivery_job (
+                        delivery_job_id,
+                        run_id,
+                        campaign_id,
+                        delivery_target_id,
+                        trigger_source,
+                        requested_by_role,
+                        requested_by_id,
+                        status,
+                        source_row_count,
+                        rows_materialized,
+                        rows_delivered,
+                        rows_skipped_conflict,
+                        started_at
+                    ) VALUES (
+                        %s::uuid,
+                        %s::uuid,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        0,
+                        0,
+                        0,
+                        0,
+                        %s::timestamptz
+                    )
+                    """,
+                    (
+                        job_id,
+                        run_uuid,
+                        campaign_id,
+                        delivery_target_id,
+                        trigger_source,
+                        requested_by_role,
+                        requested_by_id,
+                        ensure_delivery_status("pending"),
+                        started_at.isoformat(),
+                    ),
+                )
+
+                cur.execute(
+                    """
+                    INSERT INTO audience_delivery_attempt (
+                        delivery_job_id,
+                        run_id,
+                        campaign_id,
+                        delivery_target_id,
+                        attempt_status,
+                        details,
+                        attempt_ts
+                    ) VALUES (
+                        %s::uuid,
+                        %s::uuid,
+                        %s,
+                        %s,
+                        %s,
+                        %s::jsonb,
+                        %s::timestamptz
+                    )
+                    """,
+                    (
+                        job_id,
+                        run_uuid,
+                        campaign_id,
+                        delivery_target_id,
+                        ensure_delivery_status("pending"),
+                        json.dumps({"source_row_count": source_row_count}),
+                        started_at.isoformat(),
+                    ),
+                )
+
+                if source_row_count == 0:
+                    completed_at = datetime.now(timezone.utc)
+                    final_status = ensure_delivery_status("skipped_no_source_rows")
+                    cur.execute(
+                        """
+                        UPDATE audience_delivery_job
+                        SET
+                            status = %s,
+                            source_row_count = 0,
+                            rows_materialized = 0,
+                            rows_delivered = 0,
+                            rows_skipped_conflict = 0,
+                            error_detail = %s,
+                            completed_at = %s::timestamptz
+                        WHERE delivery_job_id = %s::uuid
+                        """,
+                        (
+                            final_status,
+                            "No staged rows found in audience_export_staging for run",
+                            completed_at.isoformat(),
+                            job_id,
+                        ),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO audience_delivery_attempt (
+                            delivery_job_id,
+                            run_id,
+                            campaign_id,
+                            delivery_target_id,
+                            attempt_status,
+                            details,
+                            attempt_ts
+                        ) VALUES (
+                            %s::uuid,
+                            %s::uuid,
+                            %s,
+                            %s,
+                            %s,
+                            %s::jsonb,
+                            %s::timestamptz
+                        )
+                        """,
+                        (
+                            job_id,
+                            run_uuid,
+                            campaign_id,
+                            delivery_target_id,
+                            final_status,
+                            json.dumps({"reason": "no_source_rows_in_staging"}),
+                            completed_at.isoformat(),
+                        ),
+                    )
+                    conn.commit()
+                    return {
+                        "delivery_job_id": job_id,
+                        "run_id": run_id,
+                        "campaign_id": campaign_id,
+                        "delivery_target_id": delivery_target_id,
+                        "status": final_status,
+                        "source_row_count": 0,
+                        "rows_materialized": 0,
+                        "rows_delivered": 0,
+                        "rows_skipped_conflict": 0,
+                        "artifact_uri": None,
+                        "completed_at": completed_at.isoformat(),
+                    }
+
+                materialized_at = datetime.now(timezone.utc)
+                outbox_insert_sql = """
+                    INSERT INTO audience_crm_postgres_outbox (
+                        run_id,
+                        campaign_id,
+                        customer_id,
+                        delivery_target_id,
+                        delivery_job_id,
+                        outbox_status,
+                        policy_version,
+                        integration_profile_id,
+                        source_id,
+                        export_target_id,
+                        staging_exported_ts,
+                        payload
+                    ) VALUES (
+                        %s::uuid,
+                        %s,
+                        %s,
+                        %s,
+                        %s::uuid,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s::timestamptz,
+                        %s::jsonb
+                    )
+                    ON CONFLICT (run_id, customer_id, delivery_target_id) DO NOTHING
+                """
+
+                inserted_customer_ids: set[str] = set()
+                rows_written = 0
+                for row in staged_rows:
+                    payload = {
+                        "final_score": row.final_score,
+                        "rank": row.rank,
+                        "channel": row.channel,
+                        "fs_version": row.fs_version,
+                        "emb_version": row.emb_version,
+                        "model_version": row.model_version,
+                        "index_alias": row.index_alias,
+                        "index_generation": row.index_generation,
+                        "reason_codes": _reason_codes(row),
+                        "staging_export_context": row.export_context,
+                    }
+                    cur.execute(
+                        outbox_insert_sql,
+                        (
+                            row.run_id,
+                            row.campaign_id,
+                            row.customer_id,
+                            delivery_target_id,
+                            job_id,
+                            "pending",
+                            row.policy_version,
+                            row.integration_profile_id,
+                            row.source_id,
+                            row.export_target_id,
+                            row.exported_ts.isoformat(),
+                            json.dumps(payload),
+                        ),
+                    )
+                    rowcount = max(int(cur.rowcount or 0), 0)
+                    rows_written += rowcount
+                    if rowcount > 0:
+                        inserted_customer_ids.add(row.customer_id)
+
+                rows_skipped_conflict = max(source_row_count - rows_written, 0)
+                cur.execute(
+                    """
+                    UPDATE audience_delivery_job
+                    SET
+                        status = %s,
+                        source_row_count = %s,
+                        rows_materialized = %s,
+                        artifact_uri = NULL,
+                        materialized_at = %s::timestamptz
+                    WHERE delivery_job_id = %s::uuid
+                    """,
+                    (
+                        ensure_delivery_status("materialized"),
+                        source_row_count,
+                        source_row_count,
+                        materialized_at.isoformat(),
+                        job_id,
+                    ),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO audience_delivery_attempt (
+                        delivery_job_id,
+                        run_id,
+                        campaign_id,
+                        delivery_target_id,
+                        attempt_status,
+                        details,
+                        attempt_ts
+                    ) VALUES (
+                        %s::uuid,
+                        %s::uuid,
+                        %s,
+                        %s,
+                        %s,
+                        %s::jsonb,
+                        %s::timestamptz
+                    )
+                    """,
+                    (
+                        job_id,
+                        run_uuid,
+                        campaign_id,
+                        delivery_target_id,
+                        ensure_delivery_status("materialized"),
+                        json.dumps(
+                            {
+                                "rows_materialized": source_row_count,
+                                "rows_written": rows_written,
+                                "rows_skipped_conflict": rows_skipped_conflict,
+                                "artifact_uri": None,
+                            }
+                        ),
+                        materialized_at.isoformat(),
+                    ),
+                )
+
+                record_insert_sql = """
+                    INSERT INTO audience_delivery_record (
+                        run_id,
+                        campaign_id,
+                        customer_id,
+                        delivery_target_id,
+                        policy_version,
+                        integration_profile_id,
+                        source_id,
+                        export_target_id,
+                        delivery_status,
+                        delivery_job_id,
+                        delivery_artifact_uri,
+                        delivery_payload,
+                        staging_exported_ts,
+                        materialized_ts,
+                        delivered_ts
+                    ) VALUES (
+                        %s::uuid,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s,
+                        %s::uuid,
+                        %s,
+                        %s::jsonb,
+                        %s::timestamptz,
+                        %s::timestamptz,
+                        %s::timestamptz
+                    )
+                    ON CONFLICT (run_id, customer_id, delivery_target_id) DO NOTHING
+                """
+                rows_delivered = 0
+                delivered_at = datetime.now(timezone.utc)
+                for row in staged_rows:
+                    if row.customer_id not in inserted_customer_ids:
+                        continue
+                    payload = _record_payload(
+                        row,
+                        target_payload={
+                            "outbox_delivery_job_id": job_id,
+                            "outbox_status": "pending",
+                        },
+                    )
+                    cur.execute(
+                        record_insert_sql,
+                        (
+                            row.run_id,
+                            row.campaign_id,
+                            row.customer_id,
+                            delivery_target_id,
+                            row.policy_version,
+                            row.integration_profile_id,
+                            row.source_id,
+                            row.export_target_id,
+                            ensure_delivery_status("delivered"),
+                            job_id,
+                            None,
+                            json.dumps(payload),
+                            row.exported_ts.isoformat(),
+                            materialized_at.isoformat(),
+                            delivered_at.isoformat(),
+                        ),
+                    )
+                    rows_delivered += max(int(cur.rowcount or 0), 0)
+
+                if rows_delivered != rows_written:
+                    raise RuntimeError(
+                        "Atomic delivery persistence invariant failed: "
+                        "outbox and delivery_record inserted-row counts diverged"
+                    )
+
+                if rows_delivered == 0 and rows_skipped_conflict > 0:
+                    final_status = ensure_delivery_status("skipped_conflict")
+                else:
+                    final_status = ensure_delivery_status("delivered")
+
+                cur.execute(
+                    """
+                    UPDATE audience_delivery_job
+                    SET
+                        status = %s,
+                        rows_delivered = %s,
+                        rows_skipped_conflict = %s,
+                        error_detail = NULL,
+                        completed_at = %s::timestamptz
+                    WHERE delivery_job_id = %s::uuid
+                    """,
+                    (
+                        final_status,
+                        rows_delivered,
+                        rows_skipped_conflict,
+                        delivered_at.isoformat(),
+                        job_id,
+                    ),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO audience_delivery_attempt (
+                        delivery_job_id,
+                        run_id,
+                        campaign_id,
+                        delivery_target_id,
+                        attempt_status,
+                        details,
+                        attempt_ts
+                    ) VALUES (
+                        %s::uuid,
+                        %s::uuid,
+                        %s,
+                        %s,
+                        %s,
+                        %s::jsonb,
+                        %s::timestamptz
+                    )
+                    """,
+                    (
+                        job_id,
+                        run_uuid,
+                        campaign_id,
+                        delivery_target_id,
+                        final_status,
+                        json.dumps(
+                            {
+                                "rows_delivered": rows_delivered,
+                                "rows_skipped_conflict": rows_skipped_conflict,
+                                "artifact_uri": None,
+                            }
+                        ),
+                        delivered_at.isoformat(),
+                    ),
+                )
+            conn.commit()
+
+        return {
+            "delivery_job_id": job_id,
+            "run_id": run_id,
+            "campaign_id": campaign_id,
+            "delivery_target_id": delivery_target_id,
+            "status": final_status,
+            "source_row_count": source_row_count,
+            "rows_materialized": source_row_count,
+            "rows_delivered": rows_delivered,
+            "rows_skipped_conflict": rows_skipped_conflict,
+            "artifact_uri": None,
+            "completed_at": delivered_at.isoformat(),
+        }
+    except Exception as exc:
+        failed_at = datetime.now(timezone.utc)
+        try:
+            with psycopg.connect(_postgres_conninfo()) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO audience_delivery_job (
+                            delivery_job_id,
+                            run_id,
+                            campaign_id,
+                            delivery_target_id,
+                            trigger_source,
+                            requested_by_role,
+                            requested_by_id,
+                            status,
+                            source_row_count,
+                            rows_materialized,
+                            rows_delivered,
+                            rows_skipped_conflict,
+                            error_detail,
+                            started_at,
+                            completed_at
+                        ) VALUES (
+                            %s::uuid,
+                            %s::uuid,
+                            %s,
+                            %s,
+                            %s,
+                            %s,
+                            %s,
+                            %s,
+                            %s,
+                            0,
+                            0,
+                            0,
+                            %s,
+                            %s::timestamptz,
+                            %s::timestamptz
+                        )
+                        ON CONFLICT (delivery_job_id) DO UPDATE SET
+                            status = EXCLUDED.status,
+                            error_detail = EXCLUDED.error_detail,
+                            completed_at = EXCLUDED.completed_at
+                        """,
+                        (
+                            job_id,
+                            run_uuid,
+                            campaign_id,
+                            delivery_target_id,
+                            trigger_source,
+                            requested_by_role,
+                            requested_by_id,
+                            ensure_delivery_status("failed"),
+                            source_row_count,
+                            str(exc),
+                            started_at.isoformat(),
+                            failed_at.isoformat(),
+                        ),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO audience_delivery_attempt (
+                            delivery_job_id,
+                            run_id,
+                            campaign_id,
+                            delivery_target_id,
+                            attempt_status,
+                            details,
+                            attempt_ts
+                        ) VALUES (
+                            %s::uuid,
+                            %s::uuid,
+                            %s,
+                            %s,
+                            %s,
+                            %s::jsonb,
+                            %s::timestamptz
+                        )
+                        """,
+                        (
+                            job_id,
+                            run_uuid,
+                            campaign_id,
+                            delivery_target_id,
+                            ensure_delivery_status("failed"),
+                            json.dumps({"error": str(exc)}),
+                            failed_at.isoformat(),
+                        ),
+                    )
+                conn.commit()
+        except Exception:
+            pass
+        raise
 
 
 def _serialize_row(row: dict[str, Any]) -> dict[str, Any]:

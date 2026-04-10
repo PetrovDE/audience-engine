@@ -129,7 +129,7 @@ def _wait_for_postgres_ready(timeout_seconds: float = 45.0) -> bool:
 def test_run_flow_fail_closed_persists_decisions_and_exports_zero(monkeypatch):
     if psycopg is None:
         pytest.skip("psycopg is not installed")
-    from pipelines.minimal_slice import feature_mart, run_flow
+    from pipelines.minimal_slice import control_plane, feature_mart, run_flow
 
     if not _docker_available():
         pytest.skip("docker is not available")
@@ -227,6 +227,34 @@ def test_run_flow_fail_closed_persists_decisions_and_exports_zero(monkeypatch):
         )
         monkeypatch.setattr(run_flow.integrations, "minio_is_configured", lambda: False)
         monkeypatch.setattr(feature_mart, "minio_is_configured", lambda: False)
+        monkeypatch.setattr(
+            run_flow.control_plane,
+            "resolve_run_configuration",
+            lambda policy_version,
+            integration_profile_id,
+            delivery_target_id=None: control_plane.OperationalRunConfig(
+                policy_version="policy_credit_v1",
+                policy_selection_source="operator_default",
+                integration_profile_id="local_snapshot_local_export",
+                integration_selection_source="operator_default",
+                delivery_target_id="crm_csv_file",
+                delivery_selection_source="operator_default",
+                source_id="snapshot_jsonl",
+                export_id="local_jsonl",
+            ),
+        )
+        monkeypatch.setattr(
+            run_flow.delivery_runner,
+            "execute_delivery_for_run",
+            lambda **kwargs: {
+                "delivery_job_id": "00000000-0000-4000-8000-000000000000",
+                "delivery_target_id": "crm_csv_file",
+                "status": "skipped_no_source_rows",
+                "rows_delivered": 0,
+                "rows_skipped_conflict": 0,
+                "artifact_uri": None,
+            },
+        )
 
         summary = run_flow.run_minimal_vertical_slice(
             campaign_id="camp_fail_closed_e2e"

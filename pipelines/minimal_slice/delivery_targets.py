@@ -52,11 +52,12 @@ class CrmCsvFileTarget:
     def probe_connectivity(self) -> None:
         return None
 
-    def _output_path(self, run_id: str) -> Path:
+    def _output_path(self, run_id: str, delivery_job_id: str) -> Path:
         return (
             DELIVERY_DIR
             / "crm_csv_file"
             / f"run_id={run_id}"
+            / f"delivery_job_id={delivery_job_id}"
             / "crm_delivery_audience.csv"
         )
 
@@ -78,7 +79,7 @@ class CrmCsvFileTarget:
             )
 
         ordered = sort_staged_rows(rows)
-        output_path = self._output_path(ordered[0].run_id)
+        output_path = self._output_path(ordered[0].run_id, delivery_job_id)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         delivered_ts = datetime.now(timezone.utc)
 

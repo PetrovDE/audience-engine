@@ -10,6 +10,7 @@ DELIVERY_STATUSES: tuple[str, ...] = (
     "delivered",
     "failed",
     "skipped_conflict",
+    "skipped_no_source_rows",
 )
 
 CRM_CSV_COLUMNS: tuple[str, ...] = (

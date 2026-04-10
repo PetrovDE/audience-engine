@@ -66,6 +66,37 @@ def ensure_selectable_delivery_target(
     return row
 
 
+def delivery_target_requires_staging_export(delivery_target_id: str) -> bool:
+    row = get_delivery_target(delivery_target_id)
+    return bool(row.get("requires_staging_export", False))
+
+
+def _export_target_writes_staging(export_target: dict[str, Any]) -> bool:
+    config = export_target.get("config")
+    if not isinstance(config, dict):
+        return False
+    return bool(config.get("write_postgres_table", False))
+
+
+def ensure_delivery_target_compatible_with_export(
+    delivery_target_id: str,
+    *,
+    export_target: dict[str, Any],
+    selection_kind: str,
+) -> None:
+    if not delivery_target_requires_staging_export(delivery_target_id):
+        return
+    export_id = str(export_target.get("export_id", "")).strip()
+    if _export_target_writes_staging(export_target):
+        return
+    raise ValueError(
+        f"{selection_kind} delivery target requires staged export rows in "
+        "audience_export_staging, but selected integration export target does not "
+        f"write staging rows: export_id={export_id!r}, "
+        f"delivery_target_id={delivery_target_id!r}"
+    )
+
+
 def default_delivery_target_id() -> str:
     for row in list_delivery_targets(include_planned=False):
         target_id = row.get("delivery_target_id")

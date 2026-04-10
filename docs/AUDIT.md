@@ -107,7 +107,7 @@ Uniqueness: (`run_id`, `customer_id`)
 - `trigger_source` (TEXT)
 - `requested_by_role` (TEXT)
 - `requested_by_id` (TEXT)
-- `status` (TEXT, `pending|materialized|delivered|failed|skipped_conflict`)
+- `status` (TEXT, `pending|materialized|delivered|failed|skipped_conflict|skipped_no_source_rows`)
 - `source_row_count` (INTEGER)
 - `rows_materialized` (INTEGER)
 - `rows_delivered` (INTEGER)
@@ -122,7 +122,7 @@ Uniqueness: (`run_id`, `customer_id`)
 - `run_id` (UUID, FK -> `audience_run.run_id`)
 - `campaign_id` (TEXT)
 - `delivery_target_id` (TEXT)
-- `attempt_status` (TEXT, `pending|materialized|delivered|failed|skipped_conflict`)
+- `attempt_status` (TEXT, `pending|materialized|delivered|failed|skipped_conflict|skipped_no_source_rows`)
 - `details` (JSONB)
 - `attempt_ts` (TIMESTAMPTZ)
 - `created_at` (TIMESTAMPTZ, default `now()`)
@@ -134,7 +134,7 @@ Uniqueness: (`run_id`, `customer_id`)
 - `customer_id` (TEXT)
 - `delivery_target_id` (TEXT)
 - `policy_version`, `integration_profile_id`, `source_id`, `export_target_id` (TEXT)
-- `delivery_status` (TEXT, `pending|materialized|delivered|failed|skipped_conflict`)
+- `delivery_status` (TEXT, `pending|materialized|delivered|failed|skipped_conflict|skipped_no_source_rows`)
 - `delivery_job_id` (UUID, FK -> `audience_delivery_job.delivery_job_id`)
 - `delivery_artifact_uri` (TEXT, nullable)
 - `delivery_payload` (JSONB)
@@ -149,7 +149,7 @@ Uniqueness: (`run_id`, `customer_id`, `delivery_target_id`)
 - `customer_id` (TEXT)
 - `delivery_target_id` (TEXT, current implementation: `crm_postgres_outbox`)
 - `delivery_job_id` (UUID, FK -> `audience_delivery_job.delivery_job_id`)
-- `outbox_status` (TEXT, `pending|materialized|delivered|failed|skipped_conflict`)
+- `outbox_status` (TEXT, `pending|materialized|delivered|failed|skipped_conflict|skipped_no_source_rows`)
 - `policy_version`, `integration_profile_id`, `source_id`, `export_target_id` (TEXT)
 - `staging_exported_ts` (TIMESTAMPTZ)
 - `payload` (JSONB)
@@ -157,8 +157,18 @@ Uniqueness: (`run_id`, `customer_id`, `delivery_target_id`)
 
 Uniqueness: (`run_id`, `customer_id`, `delivery_target_id`)
 
-## Append-Only Enforcement
-All audit tables block `UPDATE` and `DELETE` via trigger `forbid_audience_audit_mutation()`.
+## Mutation Enforcement
+Tables protected by `forbid_audience_audit_mutation()` reject `UPDATE` and `DELETE`:
+- `audience_run`
+- `audience_run_selected`
+- `audience_run_rejections_summary`
+- `policy_decision_audit`
+- `audience_export_staging`
+- `audience_delivery_attempt`
+- `audience_delivery_record`
+- `audience_crm_postgres_outbox`
+
+`audience_delivery_job` is intentionally stateful and is updated as delivery progresses (`pending -> materialized -> final status`).
 
 ## SQL Assets
 - Init script: `infra/postgres/init/001_audit_sink.sql`
@@ -171,6 +181,8 @@ All audit tables block `UPDATE` and `DELETE` via trigger `forbid_audience_audit_
 - Migration script: `infra/postgres/migrations/005_export_staging.sql`
 - Init script: `infra/postgres/init/006_delivery_layer.sql`
 - Migration script: `infra/postgres/migrations/006_delivery_layer.sql`
+- Init script: `infra/postgres/init/007_delivery_status_no_source_rows.sql`
+- Migration script: `infra/postgres/migrations/007_delivery_status_no_source_rows.sql`
 
 ## Minimal Slice Runtime Behavior
 `pipelines/minimal_slice/run_flow.py` writes:
@@ -181,7 +193,8 @@ All audit tables block `UPDATE` and `DELETE` via trigger `forbid_audience_audit_
 5. when the `postgres_export_table` target is selected, one `audience_export_staging` row per approved customer.
 6. delivery execution writes `audience_delivery_job` and `audience_delivery_attempt` rows.
 7. delivery execution writes idempotent `audience_delivery_record` rows.
-8. when delivery target `crm_postgres_outbox` is selected, one idempotent `audience_crm_postgres_outbox` row per delivered customer.
+8. when delivery target `crm_postgres_outbox` is selected, outbox + delivery-record persistence is atomic in one Postgres transaction (no outbox/record divergence on partial failure).
+9. when delivery target `crm_postgres_outbox` is selected, one idempotent `audience_crm_postgres_outbox` row per delivered customer.
 
 Operational control-plane run history is also appended to:
 - `data/minimal_slice/control_plane/run_events.jsonl`

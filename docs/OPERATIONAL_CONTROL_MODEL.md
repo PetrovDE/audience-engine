@@ -95,6 +95,7 @@ Delivery registry file:
 Implemented delivery targets:
 - `crm_csv_file`: deterministic CSV artifact materialization from `audience_export_staging` rows.
 - `crm_postgres_outbox`: machine-consumable Postgres outbox rows from `audience_export_staging`.
+  - Outbox and `audience_delivery_record` writes are persisted atomically in one Postgres transaction.
 
 Planned-only (not runnable) delivery targets:
 - `crm_api_future`
@@ -105,6 +106,7 @@ Selection model:
 2. Run trigger and Airflow `dag_run.conf` may override `delivery_target_id` per run.
 3. Runtime rejects planned/non-implemented delivery targets for execution.
 4. Delivery execution is governed and reads only from `audience_export_staging`.
+5. Delivery targets that require staging (`crm_csv_file`, `crm_postgres_outbox`) are rejected if the selected integration profile export target does not write `audience_export_staging` (for example `local_jsonl`, `minio_jsonl`).
 
 Delivery status model:
 - `pending`
@@ -112,6 +114,7 @@ Delivery status model:
 - `delivered`
 - `failed`
 - `skipped_conflict`
+- `skipped_no_source_rows`
 
 Idempotency model:
 - no duplicate delivery records for `(run_id, customer_id, delivery_target_id)`.
@@ -156,5 +159,6 @@ Durable run lineage:
 
 ## Deferred Items
 - Direct CRM/ACRM/DWH production connectors.
+  - No direct CRM API push is runtime-implemented in this phase.
 - Rich UI control plane (current phase is API-first).
 - A/B experimentation and advanced ranking redesign.

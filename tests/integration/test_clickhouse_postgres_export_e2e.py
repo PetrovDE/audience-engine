@@ -5,10 +5,13 @@ import os
 import socket
 import subprocess
 import time
+from hashlib import sha256
 from pathlib import Path
+from urllib import request as urllib_request
 
 import pytest
 import yaml
+from fastapi.testclient import TestClient
 
 try:
     import clickhouse_connect  # noqa: F401
@@ -32,6 +35,7 @@ from pipelines.minimal_slice import (
     run_flow,
     storage,
 )
+from services.retrieval_api import app as retrieval_api_app
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_FILE = ROOT / "infra" / "docker-compose.dev.yml"
@@ -45,6 +49,9 @@ EXPORT_STAGING_MIGRATION_SQL = (
 )
 DELIVERY_LAYER_MIGRATION_SQL = (
     ROOT / "infra" / "postgres" / "migrations" / "006_delivery_layer.sql"
+)
+DELIVERY_STATUS_MIGRATION_SQL = (
+    ROOT / "infra" / "postgres" / "migrations" / "007_delivery_status_no_source_rows.sql"
 )
 SERVICE_PORTS = {
     "postgres": 5432,
@@ -220,6 +227,21 @@ def _wait_for_clickhouse_ready(timeout_seconds: float = 45.0) -> bool:
     return False
 
 
+def _wait_for_qdrant_ready(
+    *, host: str, port: int, timeout_seconds: float = 45.0
+) -> bool:
+    deadline = time.time() + timeout_seconds
+    url = f"http://{host}:{port}/collections"
+    while time.time() < deadline:
+        try:
+            with urllib_request.urlopen(url, timeout=2) as resp:
+                if int(resp.status) == 200:
+                    return True
+        except Exception:
+            time.sleep(0.5)
+    return False
+
+
 def _read_jsonl(path: Path) -> list[dict]:
     rows: list[dict] = []
     with path.open("r", encoding="utf-8") as f:
@@ -322,7 +344,74 @@ def _ensure_delivery_tables(*, postgres_host: str, postgres_port: int) -> None:
             if not (existing and existing[0]):
                 cur.execute(EXPORT_STAGING_MIGRATION_SQL.read_text(encoding="utf-8"))
             cur.execute(DELIVERY_LAYER_MIGRATION_SQL.read_text(encoding="utf-8"))
+            cur.execute(DELIVERY_STATUS_MIGRATION_SQL.read_text(encoding="utf-8"))
         conn.commit()
+
+
+def _configure_live_runtime(
+    *,
+    monkeypatch,
+    postgres_host: str,
+    postgres_port: int,
+    clickhouse_host: str,
+    clickhouse_port: int,
+    qdrant_host: str,
+    qdrant_port: int,
+) -> None:
+    monkeypatch.setattr(storage.config, "CLICKHOUSE_HOST", clickhouse_host)
+    monkeypatch.setattr(storage.config, "CLICKHOUSE_PORT", clickhouse_port)
+    monkeypatch.setattr(storage.config, "CLICKHOUSE_DB", "audience_engine")
+    monkeypatch.setattr(storage.config, "CLICKHOUSE_USER", "audience_engine")
+    monkeypatch.setattr(storage.config, "CLICKHOUSE_PASSWORD", "change_me")
+    monkeypatch.setattr(
+        storage.config,
+        "CLICKHOUSE_FEATURE_SLICE_QUERY",
+        (
+            "SELECT customer_id, fs_version, policy_version, customer_age_years, "
+            "customer_tenure_months, credit_score_band, delinquency_12m_count, "
+            "utilization_ratio_avg_3m, card_spend_total_3m, "
+            "digital_engagement_score, is_employee_flag, do_not_contact_flag, "
+            "opt_out_flag, legal_suppression_flag, region_code, segment_id, "
+            "product_line FROM feature_mart_snapshot ORDER BY customer_id"
+        ),
+    )
+    monkeypatch.setattr(storage.config, "CLICKHOUSE_FEATURE_SLICE_LIMIT", 100)
+
+    monkeypatch.setattr(run_flow, "POSTGRES_HOST", postgres_host)
+    monkeypatch.setattr(run_flow, "POSTGRES_PORT", postgres_port)
+    monkeypatch.setattr(run_flow, "POSTGRES_DB", "audience_engine")
+    monkeypatch.setattr(run_flow, "POSTGRES_USER", "audience_engine")
+    monkeypatch.setattr(run_flow, "POSTGRES_PASSWORD", "change_me")
+    monkeypatch.setattr(qdrant_index, "POSTGRES_HOST", postgres_host)
+    monkeypatch.setattr(qdrant_index, "POSTGRES_PORT", postgres_port)
+    monkeypatch.setattr(qdrant_index, "POSTGRES_DB", "audience_engine")
+    monkeypatch.setattr(qdrant_index, "POSTGRES_USER", "audience_engine")
+    monkeypatch.setattr(qdrant_index, "POSTGRES_PASSWORD", "change_me")
+    monkeypatch.setattr(lifecycle_audit, "POSTGRES_HOST", postgres_host)
+    monkeypatch.setattr(lifecycle_audit, "POSTGRES_PORT", postgres_port)
+    monkeypatch.setattr(lifecycle_audit, "POSTGRES_DB", "audience_engine")
+    monkeypatch.setattr(lifecycle_audit, "POSTGRES_USER", "audience_engine")
+    monkeypatch.setattr(lifecycle_audit, "POSTGRES_PASSWORD", "change_me")
+    monkeypatch.setattr(qdrant_index, "QDRANT_URL", f"http://{qdrant_host}:{qdrant_port}")
+    monkeypatch.setattr(retrieval, "QDRANT_URL", f"http://{qdrant_host}:{qdrant_port}")
+
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_HOST", postgres_host)
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_PORT", postgres_port)
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_DB", "audience_engine")
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_USER", "audience_engine")
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_PASSWORD", "change_me")
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_SCHEMA", "public")
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_TABLE", "audience_export_staging")
+    monkeypatch.setattr(export_table, "EXPORT_POSTGRES_SSLMODE", "")
+    monkeypatch.setattr(delivery_store, "POSTGRES_HOST", postgres_host)
+    monkeypatch.setattr(delivery_store, "POSTGRES_PORT", postgres_port)
+    monkeypatch.setattr(delivery_store, "POSTGRES_DB", "audience_engine")
+    monkeypatch.setattr(delivery_store, "POSTGRES_USER", "audience_engine")
+    monkeypatch.setattr(delivery_store, "POSTGRES_PASSWORD", "change_me")
+    monkeypatch.setattr(delivery_store, "POSTGRES_SSLMODE", "")
+
+    monkeypatch.setattr(feature_mart, "minio_is_configured", lambda: False)
+    monkeypatch.setattr(run_flow, "build_embeddings", _write_cpu_embeddings_for_run_flow)
 
 
 def test_clickhouse_postgres_export_profile_live_e2e(monkeypatch):
@@ -352,71 +441,20 @@ def test_clickhouse_postgres_export_profile_live_e2e(monkeypatch):
             pytest.skip("postgres did not become ready in time")
         if not _wait_for_clickhouse_ready():
             pytest.skip("clickhouse did not become ready in time")
+        if not _wait_for_qdrant_ready(host=qdrant_host, port=qdrant_port):
+            pytest.skip("qdrant did not become ready in time")
 
         _ensure_delivery_tables(postgres_host=pg_host, postgres_port=pg_port)
         _seed_clickhouse_feature_slice()
 
-        monkeypatch.setattr(storage.config, "CLICKHOUSE_HOST", ch_host)
-        monkeypatch.setattr(storage.config, "CLICKHOUSE_PORT", ch_port)
-        monkeypatch.setattr(storage.config, "CLICKHOUSE_DB", "audience_engine")
-        monkeypatch.setattr(storage.config, "CLICKHOUSE_USER", "audience_engine")
-        monkeypatch.setattr(storage.config, "CLICKHOUSE_PASSWORD", "change_me")
-        monkeypatch.setattr(
-            storage.config,
-            "CLICKHOUSE_FEATURE_SLICE_QUERY",
-            (
-                "SELECT customer_id, fs_version, policy_version, customer_age_years, "
-                "customer_tenure_months, credit_score_band, delinquency_12m_count, "
-                "utilization_ratio_avg_3m, card_spend_total_3m, "
-                "digital_engagement_score, is_employee_flag, do_not_contact_flag, "
-                "opt_out_flag, legal_suppression_flag, region_code, segment_id, "
-                "product_line FROM feature_mart_snapshot ORDER BY customer_id"
-            ),
-        )
-        monkeypatch.setattr(storage.config, "CLICKHOUSE_FEATURE_SLICE_LIMIT", 100)
-
-        monkeypatch.setattr(run_flow, "POSTGRES_HOST", pg_host)
-        monkeypatch.setattr(run_flow, "POSTGRES_PORT", pg_port)
-        monkeypatch.setattr(run_flow, "POSTGRES_DB", "audience_engine")
-        monkeypatch.setattr(run_flow, "POSTGRES_USER", "audience_engine")
-        monkeypatch.setattr(run_flow, "POSTGRES_PASSWORD", "change_me")
-        monkeypatch.setattr(qdrant_index, "POSTGRES_HOST", pg_host)
-        monkeypatch.setattr(qdrant_index, "POSTGRES_PORT", pg_port)
-        monkeypatch.setattr(qdrant_index, "POSTGRES_DB", "audience_engine")
-        monkeypatch.setattr(qdrant_index, "POSTGRES_USER", "audience_engine")
-        monkeypatch.setattr(qdrant_index, "POSTGRES_PASSWORD", "change_me")
-        monkeypatch.setattr(lifecycle_audit, "POSTGRES_HOST", pg_host)
-        monkeypatch.setattr(lifecycle_audit, "POSTGRES_PORT", pg_port)
-        monkeypatch.setattr(lifecycle_audit, "POSTGRES_DB", "audience_engine")
-        monkeypatch.setattr(lifecycle_audit, "POSTGRES_USER", "audience_engine")
-        monkeypatch.setattr(lifecycle_audit, "POSTGRES_PASSWORD", "change_me")
-        monkeypatch.setattr(
-            qdrant_index, "QDRANT_URL", f"http://{qdrant_host}:{qdrant_port}"
-        )
-        monkeypatch.setattr(
-            retrieval, "QDRANT_URL", f"http://{qdrant_host}:{qdrant_port}"
-        )
-
-        monkeypatch.setattr(export_table, "EXPORT_POSTGRES_HOST", pg_host)
-        monkeypatch.setattr(export_table, "EXPORT_POSTGRES_PORT", pg_port)
-        monkeypatch.setattr(export_table, "EXPORT_POSTGRES_DB", "audience_engine")
-        monkeypatch.setattr(export_table, "EXPORT_POSTGRES_USER", "audience_engine")
-        monkeypatch.setattr(export_table, "EXPORT_POSTGRES_PASSWORD", "change_me")
-        monkeypatch.setattr(export_table, "EXPORT_POSTGRES_SCHEMA", "public")
-        monkeypatch.setattr(
-            export_table, "EXPORT_POSTGRES_TABLE", "audience_export_staging"
-        )
-        monkeypatch.setattr(export_table, "EXPORT_POSTGRES_SSLMODE", "")
-        monkeypatch.setattr(delivery_store, "POSTGRES_HOST", pg_host)
-        monkeypatch.setattr(delivery_store, "POSTGRES_PORT", pg_port)
-        monkeypatch.setattr(delivery_store, "POSTGRES_DB", "audience_engine")
-        monkeypatch.setattr(delivery_store, "POSTGRES_USER", "audience_engine")
-        monkeypatch.setattr(delivery_store, "POSTGRES_PASSWORD", "change_me")
-        monkeypatch.setattr(delivery_store, "POSTGRES_SSLMODE", "")
-
-        monkeypatch.setattr(feature_mart, "minio_is_configured", lambda: False)
-        monkeypatch.setattr(
-            run_flow, "build_embeddings", _write_cpu_embeddings_for_run_flow
+        _configure_live_runtime(
+            monkeypatch=monkeypatch,
+            postgres_host=pg_host,
+            postgres_port=pg_port,
+            clickhouse_host=ch_host,
+            clickhouse_port=ch_port,
+            qdrant_host=qdrant_host,
+            qdrant_port=qdrant_port,
         )
 
         summary = run_flow.run_minimal_vertical_slice(
@@ -585,6 +623,226 @@ def test_clickhouse_postgres_export_profile_live_e2e(monkeypatch):
                 )
                 outbox_count_after_retry = int(cur.fetchone()[0])
         assert outbox_count_after_retry == len(outbox_rows)
+    finally:
+        if started_by_test and not _prefer_stack_preservation():
+            _compose("stop", *sorted(started_by_test))
+
+
+def test_clickhouse_postgres_csv_delivery_retry_keeps_immutable_artifacts(monkeypatch):
+    if psycopg is None:
+        pytest.skip("psycopg is not installed")
+    if clickhouse_connect is None:
+        pytest.skip("clickhouse-connect is not installed")
+    if not _docker_available():
+        pytest.skip("docker is not available")
+
+    _ensure_env_file()
+    required = {"postgres", "clickhouse", "qdrant"}
+    running_before = _running_services()
+    started_by_test = required - running_before
+    if started_by_test:
+        up = _compose("up", "-d", *sorted(started_by_test))
+        if up.returncode != 0:
+            pytest.skip(f"docker compose up failed: {up.stderr.strip()}")
+
+    try:
+        endpoints = _required_endpoints()
+        pg_host, pg_port = endpoints["postgres"]
+        ch_host, ch_port = endpoints["clickhouse"]
+        qdrant_host, qdrant_port = endpoints["qdrant"]
+
+        if not _wait_for_postgres_ready(host=pg_host, port=pg_port):
+            pytest.skip("postgres did not become ready in time")
+        if not _wait_for_clickhouse_ready():
+            pytest.skip("clickhouse did not become ready in time")
+        if not _wait_for_qdrant_ready(host=qdrant_host, port=qdrant_port):
+            pytest.skip("qdrant did not become ready in time")
+
+        _ensure_delivery_tables(postgres_host=pg_host, postgres_port=pg_port)
+        _seed_clickhouse_feature_slice()
+        _configure_live_runtime(
+            monkeypatch=monkeypatch,
+            postgres_host=pg_host,
+            postgres_port=pg_port,
+            clickhouse_host=ch_host,
+            clickhouse_port=ch_port,
+            qdrant_host=qdrant_host,
+            qdrant_port=qdrant_port,
+        )
+
+        summary = run_flow.run_minimal_vertical_slice(
+            campaign_id="camp_clickhouse_csv_e2e",
+            policy_version="policy_credit_v1",
+            integration_profile_id="clickhouse_postgres_export",
+            delivery_target_id="crm_csv_file",
+            requested_size=3,
+        )
+        assert summary["status"] == "ok"
+        assert summary["delivery"]["status"] == "delivered"
+
+        run_id = summary["versions"]["run_id"]
+        first_job_id = summary["delivery"]["delivery_job_id"]
+        first_artifact = Path(str(summary["delivery"]["artifact_uri"]))
+        assert first_artifact.exists()
+        assert f"run_id={run_id}" in str(first_artifact)
+        assert f"delivery_job_id={first_job_id}" in str(first_artifact)
+        first_hash_before_retry = sha256(first_artifact.read_bytes()).hexdigest()
+        first_rows_delivered = int(summary["delivery"]["rows_delivered"])
+
+        second_delivery = delivery_runner.execute_delivery_for_run(
+            run_id=run_id,
+            delivery_target_id="crm_csv_file",
+            trigger_source="integration:test",
+            requested_by_role="system_internal",
+            requested_by_id="system:test",
+        )
+        assert second_delivery["status"] == "skipped_conflict"
+        assert second_delivery["rows_delivered"] == 0
+        assert second_delivery["rows_skipped_conflict"] == first_rows_delivered
+
+        second_job_id = second_delivery["delivery_job_id"]
+        second_artifact = Path(str(second_delivery["artifact_uri"]))
+        assert second_artifact.exists()
+        assert second_artifact != first_artifact
+        assert f"delivery_job_id={second_job_id}" in str(second_artifact)
+        assert sha256(first_artifact.read_bytes()).hexdigest() == first_hash_before_retry
+
+        with psycopg.connect(_postgres_conninfo(host=pg_host, port=pg_port)) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT delivery_job_id::text, count(*)
+                    FROM audience_delivery_record
+                    WHERE run_id = %s::uuid AND delivery_target_id = 'crm_csv_file'
+                    GROUP BY delivery_job_id
+                    ORDER BY delivery_job_id::text
+                    """,
+                    (run_id,),
+                )
+                grouped = cur.fetchall()
+                cur.execute(
+                    """
+                    SELECT status
+                    FROM audience_delivery_job
+                    WHERE run_id = %s::uuid AND delivery_target_id = 'crm_csv_file'
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """,
+                    (run_id,),
+                )
+                latest_status = str(cur.fetchone()[0])
+        assert grouped == [(first_job_id, first_rows_delivered)]
+        assert latest_status == "skipped_conflict"
+    finally:
+        if started_by_test and not _prefer_stack_preservation():
+            _compose("stop", *sorted(started_by_test))
+
+
+def test_retrieval_admin_delivery_endpoints_are_db_backed(monkeypatch):
+    if psycopg is None:
+        pytest.skip("psycopg is not installed")
+    if clickhouse_connect is None:
+        pytest.skip("clickhouse-connect is not installed")
+    if not _docker_available():
+        pytest.skip("docker is not available")
+
+    _ensure_env_file()
+    required = {"postgres", "clickhouse", "qdrant"}
+    running_before = _running_services()
+    started_by_test = required - running_before
+    if started_by_test:
+        up = _compose("up", "-d", *sorted(started_by_test))
+        if up.returncode != 0:
+            pytest.skip(f"docker compose up failed: {up.stderr.strip()}")
+
+    try:
+        endpoints = _required_endpoints()
+        pg_host, pg_port = endpoints["postgres"]
+        ch_host, ch_port = endpoints["clickhouse"]
+        qdrant_host, qdrant_port = endpoints["qdrant"]
+
+        if not _wait_for_postgres_ready(host=pg_host, port=pg_port):
+            pytest.skip("postgres did not become ready in time")
+        if not _wait_for_clickhouse_ready():
+            pytest.skip("clickhouse did not become ready in time")
+        if not _wait_for_qdrant_ready(host=qdrant_host, port=qdrant_port):
+            pytest.skip("qdrant did not become ready in time")
+
+        _ensure_delivery_tables(postgres_host=pg_host, postgres_port=pg_port)
+        _seed_clickhouse_feature_slice()
+        _configure_live_runtime(
+            monkeypatch=monkeypatch,
+            postgres_host=pg_host,
+            postgres_port=pg_port,
+            clickhouse_host=ch_host,
+            clickhouse_port=ch_port,
+            qdrant_host=qdrant_host,
+            qdrant_port=qdrant_port,
+        )
+
+        summary = run_flow.run_minimal_vertical_slice(
+            campaign_id="camp_admin_delivery_api_e2e",
+            policy_version="policy_credit_v1",
+            integration_profile_id="clickhouse_postgres_export",
+            delivery_target_id="crm_postgres_outbox",
+            requested_size=3,
+        )
+        run_id = summary["versions"]["run_id"]
+        initial_job_id = summary["delivery"]["delivery_job_id"]
+        assert summary["delivery"]["status"] == "delivered"
+
+        monkeypatch.setenv("AE_ADMIN_API_KEYS", "admin_live_key")
+        monkeypatch.setenv("AE_CAMPAIGN_API_KEYS", "campaign_live_key")
+        client = TestClient(retrieval_api_app.app)
+        headers = {"X-AE-API-Key": "admin_live_key"}
+
+        targets_resp = client.get(
+            "/v1/admin/control-plane/delivery-targets?include_planned=false",
+            headers=headers,
+        )
+        jobs_resp = client.get("/v1/admin/delivery/jobs/recent?limit=50", headers=headers)
+        attempts_resp = client.get(
+            f"/v1/admin/delivery/attempts/recent?run_id={run_id}&limit=50",
+            headers=headers,
+        )
+        summary_resp = client.get(
+            f"/v1/admin/delivery/runs/{run_id}/latest-summary",
+            headers=headers,
+        )
+        records_resp = client.get(
+            f"/v1/admin/delivery/runs/{run_id}/records?limit=200",
+            headers=headers,
+        )
+
+        assert targets_resp.status_code == 200
+        assert jobs_resp.status_code == 200
+        assert attempts_resp.status_code == 200
+        assert summary_resp.status_code == 200
+        assert records_resp.status_code == 200
+        assert any(
+            row["delivery_job_id"] == initial_job_id for row in jobs_resp.json()["jobs"]
+        )
+        assert summary_resp.json()["delivery_job_id"] == initial_job_id
+        assert records_resp.json()["count"] >= 1
+
+        retry_resp = client.post(
+            "/v1/admin/delivery/trigger",
+            json={"run_id": run_id, "delivery_target_id": "crm_postgres_outbox"},
+            headers=headers,
+        )
+        assert retry_resp.status_code == 200
+        assert retry_resp.json()["status"] == "skipped_conflict"
+
+        jobs_after_retry = client.get(
+            "/v1/admin/delivery/jobs/recent?limit=50",
+            headers=headers,
+        )
+        assert jobs_after_retry.status_code == 200
+        jobs_for_run = [
+            row for row in jobs_after_retry.json()["jobs"] if row.get("run_id") == run_id
+        ]
+        assert len(jobs_for_run) >= 2
+        assert jobs_for_run[0]["status"] in {"skipped_conflict", "delivered"}
     finally:
         if started_by_test and not _prefer_stack_preservation():
             _compose("stop", *sorted(started_by_test))

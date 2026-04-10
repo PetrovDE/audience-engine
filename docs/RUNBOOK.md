@@ -137,7 +137,11 @@ docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml cp po
 - For existing environments, apply migrations manually:
   - `infra/postgres/migrations/001_audit_sink.sql`
   - `infra/postgres/migrations/003_policy_decision_audit.sql`
-- Audit tables are append-only; updates/deletes are rejected by trigger.
+  - `infra/postgres/migrations/005_export_staging.sql`
+  - `infra/postgres/migrations/006_delivery_layer.sql`
+  - `infra/postgres/migrations/007_delivery_status_no_source_rows.sql`
+- Mutation-protected audit tables reject updates/deletes via trigger (`audience_run*`, `policy_decision_audit`, `audience_export_staging`, `audience_delivery_attempt`, `audience_delivery_record`, `audience_crm_postgres_outbox`).
+- `audience_delivery_job` is intentionally stateful and updates status through delivery lifecycle stages.
 - Policy decision explain endpoint is available at `GET /v1/policy/decisions/{run_id}/{customer_id}` via retrieval API.
 - If `FEATURE_SLICE_SOURCE=clickhouse`, ensure `CLICKHOUSE_FEATURE_SLICE_QUERY` returns all contract columns needed by `governance/contracts/feature_mart.yaml`.
 - For `clickhouse_postgres_export`, validate export-target settings:
@@ -148,7 +152,12 @@ docker compose --env-file infra/.env.local -f infra/docker-compose.dev.yml cp po
   - `governance/delivery/delivery_registry.yaml`
   - implemented: `crm_csv_file`, `crm_postgres_outbox`
   - planned only: `crm_api_future`, `acrm_api_future`
+- Delivery target compatibility:
+  - `crm_csv_file` and `crm_postgres_outbox` require integration export targets that write `audience_export_staging` (for example `postgres_export_table`).
+- Delivery status model includes non-success no-source visibility:
+  - `skipped_no_source_rows`
 - Delivery source of truth remains `audience_export_staging`; no direct policy-result bypass is used for delivery.
+- Delivery currently supports staged activation only (CSV/outbox handoff). Direct CRM API push targets remain planned, not runtime-implemented.
 - If MinIO credentials are unset/invalid, feature-mart Parquet and export uploads fail fast during runtime operations.
 - If Redis cache is unavailable, embedding runs fail; disable cache explicitly with `REDIS_EMBEDDING_CACHE_ENABLED=0` for emergency bypass.
 

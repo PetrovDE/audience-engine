@@ -49,6 +49,7 @@ def test_crm_csv_target_materializes_deterministic_artifact(monkeypatch, tmp_pat
         tmp_path
         / "crm_csv_file"
         / "run_id=7bf0c5be-f95c-4827-a5c4-6ee71f2807f2"
+        / "delivery_job_id=bcf4565c-2f93-41ab-98be-74a368932626"
         / "crm_delivery_audience.csv"
     )
     assert artifact_path.exists()
@@ -58,3 +59,26 @@ def test_crm_csv_target_materializes_deterministic_artifact(monkeypatch, tmp_pat
 
     assert [row["customer_id"] for row in rows] == ["cust_001", "cust_002"]
     assert [row["rank"] for row in rows] == ["1", "2"]
+
+
+def test_crm_csv_target_uses_immutable_job_scoped_artifact_paths(monkeypatch, tmp_path):
+    monkeypatch.setattr(delivery_targets, "DELIVERY_DIR", tmp_path)
+    target = delivery_targets.CrmCsvFileTarget()
+    rows = [_row(customer_id="cust_001", rank=1)]
+
+    first = target.materialize(
+        rows=rows,
+        delivery_job_id="11111111-1111-4111-8111-111111111111",
+    )
+    second = target.materialize(
+        rows=rows,
+        delivery_job_id="22222222-2222-4222-8222-222222222222",
+    )
+
+    assert first.artifact_uri != second.artifact_uri
+    assert "delivery_job_id=11111111-1111-4111-8111-111111111111" in str(
+        first.artifact_uri
+    )
+    assert "delivery_job_id=22222222-2222-4222-8222-222222222222" in str(
+        second.artifact_uri
+    )

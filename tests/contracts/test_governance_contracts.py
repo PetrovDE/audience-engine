@@ -163,3 +163,11 @@ def test_delivery_registry_declares_implemented_and_planned_targets():
     assert by_id.get("crm_postgres_outbox") == "implemented"
     assert by_id.get("crm_api_future") == "planned"
     assert by_id.get("acrm_api_future") == "planned"
+
+    by_requires_staging = {
+        str(item.get("delivery_target_id")): bool(item.get("requires_staging_export"))
+        for item in targets
+        if isinstance(item, dict)
+    }
+    assert by_requires_staging.get("crm_csv_file") is True
+    assert by_requires_staging.get("crm_postgres_outbox") is True

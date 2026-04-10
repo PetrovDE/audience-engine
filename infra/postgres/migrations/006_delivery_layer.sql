@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS audience_delivery_job (
     requested_by_role TEXT NOT NULL,
     requested_by_id TEXT NOT NULL,
     status TEXT NOT NULL CHECK (
-        status IN ('pending', 'materialized', 'delivered', 'failed', 'skipped_conflict')
+        status IN ('pending', 'materialized', 'delivered', 'failed', 'skipped_conflict', 'skipped_no_source_rows')
     ),
     source_row_count INTEGER NOT NULL DEFAULT 0 CHECK (source_row_count >= 0),
     rows_materialized INTEGER NOT NULL DEFAULT 0 CHECK (rows_materialized >= 0),
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS audience_delivery_attempt (
     campaign_id TEXT NOT NULL,
     delivery_target_id TEXT NOT NULL,
     attempt_status TEXT NOT NULL CHECK (
-        attempt_status IN ('pending', 'materialized', 'delivered', 'failed', 'skipped_conflict')
+        attempt_status IN ('pending', 'materialized', 'delivered', 'failed', 'skipped_conflict', 'skipped_no_source_rows')
     ),
     details JSONB NOT NULL DEFAULT '{}'::jsonb,
     attempt_ts TIMESTAMPTZ NOT NULL,
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS audience_delivery_record (
     source_id TEXT NOT NULL,
     export_target_id TEXT NOT NULL,
     delivery_status TEXT NOT NULL CHECK (
-        delivery_status IN ('pending', 'materialized', 'delivered', 'failed', 'skipped_conflict')
+        delivery_status IN ('pending', 'materialized', 'delivered', 'failed', 'skipped_conflict', 'skipped_no_source_rows')
     ),
     delivery_job_id UUID NOT NULL REFERENCES audience_delivery_job(delivery_job_id),
     delivery_artifact_uri TEXT,
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS audience_crm_postgres_outbox (
     delivery_target_id TEXT NOT NULL,
     delivery_job_id UUID NOT NULL REFERENCES audience_delivery_job(delivery_job_id),
     outbox_status TEXT NOT NULL CHECK (
-        outbox_status IN ('pending', 'materialized', 'delivered', 'failed', 'skipped_conflict')
+        outbox_status IN ('pending', 'materialized', 'delivered', 'failed', 'skipped_conflict', 'skipped_no_source_rows')
     ),
     policy_version TEXT NOT NULL,
     integration_profile_id TEXT NOT NULL,

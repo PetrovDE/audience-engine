@@ -11,6 +11,8 @@ This document defines the required test layout and execution model for Architect
 - `tests/unit/test_delivery_contract_registry.py`
 - `tests/unit/test_delivery_csv_target.py`
 - `tests/unit/test_delivery_outbox_idempotency.py`
+- `tests/unit/test_delivery_runner_execution.py`
+- `tests/unit/test_delivery_store_atomic_outbox.py`
 - `tests/integration/test_minimal_slice_smoke.py`
 - `tests/integration/test_clickhouse_postgres_export_e2e.py`
 - `tests/integration/test_retrieval_api_smoke.py`
@@ -30,7 +32,11 @@ This document defines the required test layout and execution model for Architect
   - Version bundle preflight guards.
   - Delivery contract + delivery registry behavior.
   - CRM CSV materialization ordering/schema.
+  - CRM CSV immutable job-scoped artifact lineage.
+  - Delivery compatibility gating between integration export and delivery target.
+  - Delivery zero-source-row honest non-success status (`skipped_no_source_rows`).
   - Postgres outbox idempotent conflict handling.
+  - Atomic outbox + delivery-record persistence path.
 - Integration smoke:
   - Compose bring-up.
   - Seed synthetic data.
@@ -40,6 +46,7 @@ This document defines the required test layout and execution model for Architect
   - Retrieval -> policy -> export.
   - Verify Postgres audit rows exist.
   - Verify governed delivery from `audience_export_staging` to `crm_postgres_outbox`.
+  - Verify governed delivery from `audience_export_staging` to `crm_csv_file` with retry-safe immutable artifacts.
   - Verify delivery admin endpoints and RBAC behavior.
 
 ## CI Modes
