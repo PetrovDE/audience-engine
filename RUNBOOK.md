@@ -26,7 +26,15 @@ This runbook covers Prometheus + Grafana monitoring for:
    uv run --env-file infra/.env.local python -m uvicorn services.retrieval_api.app:app --host 0.0.0.0 --port 8000 --reload
    ```
    This `--env-file` load is required for local Operator Console login bootstrap (`OPERATOR_UI_USERNAME` / `OPERATOR_UI_PASSWORD` from `infra/.env.local`).
-4. (Optional but recommended) Run one pipeline flow to seed embedding/policy/freshness metrics:
+4. Bootstrap one local/dev admin user for Stage 9 user administration:
+   ```bash
+   uv run --env-file infra/.env.local python -m pipelines.minimal_slice.user_admin --bootstrap-dev-admin
+   ```
+   Optional preview without writes:
+   ```bash
+   uv run --env-file infra/.env.local python -m pipelines.minimal_slice.user_admin --bootstrap-dev-admin --dry-run
+   ```
+5. (Optional but recommended) Run one pipeline flow to seed embedding/policy/freshness metrics:
    ```bash
    uv run --env-file infra/.env.local python -m pipelines.minimal_slice.run_flow
    ```

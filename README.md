@@ -103,6 +103,10 @@ Login model:
 - Use `OPERATOR_UI_USERNAME` / `OPERATOR_UI_PASSWORD` from env (local defaults: `admin` / `203217`).
 - UI uses a signed session cookie and does not store raw admin API keys in browser cookies.
 - Admin/campaign API routes stay RBAC-protected with `X-AE-API-Key` and `AE_*_API_KEYS`.
+- Stage 9 user/role foundation bootstrap command (creates/reconciles one active `admin_operator` user):
+  ```bash
+  uv run --env-file infra/.env.local python -m pipelines.minimal_slice.user_admin --bootstrap-dev-admin
+  ```
 
 Implemented UI sections:
 - Dashboard
@@ -112,6 +116,7 @@ Implemented UI sections:
 - Delivery
 - Explain / Audit
 - Integrations / Readiness
+- User Admin (`/operator/admin/users`)
 
 Honesty rules in UI:
 - Planned connectors/targets remain visible but non-selectable for defaults/run triggers.

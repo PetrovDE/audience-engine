@@ -1,0 +1,81 @@
+{% extends "operator/base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>User Administration</h2>
+  <p class="quiet">Create and manage internal test users plus role assignments.</p>
+  {% if users %}
+  <table>
+    <thead>
+      <tr>
+        <th>Username</th>
+        <th>Display Name</th>
+        <th>Status</th>
+        <th>Roles</th>
+        <th>Created</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in users %}
+      <tr>
+        <td><a href="/operator/admin/users/{{ row.user_id }}">{{ row.username }}</a></td>
+        <td>{{ row.display_name }}</td>
+        <td>
+          {% if row.is_active %}
+          <span class="status-pill status-active">active</span>
+          {% else %}
+          <span class="status-pill status-inactive">inactive</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if row.roles %}
+            {% for role in row.roles %}
+              <span class="status-pill">{{ role_labels.get(role, role) }}</span>
+            {% endfor %}
+          {% else %}
+          <span class="quiet">none</span>
+          {% endif %}
+        </td>
+        <td>{{ row.created_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No users found.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Create User</h2>
+  <form method="post" action="/operator/admin/users" class="form-grid">
+    <label for="username">Username</label>
+    <input id="username" name="username" required placeholder="jane.doe">
+
+    <label for="display_name">Display Name</label>
+    <input id="display_name" name="display_name" placeholder="Jane Doe">
+
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" placeholder="jane.doe@example.com">
+
+    <label>Status</label>
+    <select name="is_active">
+      <option value="1">active</option>
+      <option value="0">inactive</option>
+    </select>
+
+    <label>Initial Roles</label>
+    <div>
+      {% for role in role_values %}
+      <label class="inline-checkbox">
+        <input type="checkbox" name="roles" value="{{ role }}">
+        {{ role_labels.get(role, role) }}
+      </label>
+      {% endfor %}
+    </div>
+
+    <span></span>
+    <button type="submit" class="button">Create User</button>
+  </form>
+</section>
+{% endblock %}
+

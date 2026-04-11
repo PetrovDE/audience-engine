@@ -216,6 +216,18 @@ body {
   gap: 0.5rem;
 }
 
+.inline-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-right: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.inline-checkbox input {
+  width: auto;
+}
+
 label {
   font-size: 0.87rem;
   color: #2f475c;
@@ -299,6 +311,27 @@ pre {
   padding: 0.14rem 0.46rem;
   font-size: 0.74rem;
   margin-left: 0.35rem;
+}
+
+.status-pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.15rem 0.48rem;
+  font-size: 0.74rem;
+  background: #edf2f7;
+  color: #2f475c;
+  margin-right: 0.3rem;
+  margin-bottom: 0.2rem;
+}
+
+.status-active {
+  background: #e8f6ec;
+  color: #0f6135;
+}
+
+.status-inactive {
+  background: #f6ecf2;
+  color: #6f2a50;
 }
 
 .chip.implemented {
