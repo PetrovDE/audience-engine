@@ -1,30 +1,29 @@
 {
-  "run_ts": "2026-04-10T18:09:36.537276+00:00",
-  "status": "failed",
+  "run_ts": "2026-04-11T09:12:05.755065+00:00",
+  "status": "ok",
   "operations": {
     "policy_version": "policy_credit_v1",
     "policy_selection_source": "operator_default",
-    "integration_profile_id": "local_snapshot_local_export",
-    "export_profile_id": "local_snapshot_local_export",
+    "integration_profile_id": "clickhouse_postgres_export",
+    "export_profile_id": "clickhouse_postgres_export",
     "integration_selection_source": "operator_default",
     "delivery_target_id": "crm_csv_file",
     "delivery_selection_source": "operator_default",
-    "source_id": "snapshot_jsonl",
-    "export_id": "local_jsonl",
+    "source_id": "clickhouse_feature_slice",
+    "export_id": "postgres_export_table",
     "requested_size": 20,
-    "feature_set_version_id": null,
-    "model_version_id": null,
-    "embedding_model_version_id": "1ec72509-8297-4ede-8dc6-caafc4d8a1de",
-    "policy_version_id": null,
-    "audience_definition_version_id": "08c35624-3208-4322-828c-0a4bcede0d42",
-    "lineage_resolution_mode": "degraded_unversioned",
-    "lineage_resolution_reasons": [
-      "missing_required_active_versions:feature_set_version_id, model_version_id, policy_version_id"
-    ],
-    "lineage_resolution_timestamp": "2026-04-10T18:09:36.537276+00:00",
+    "feature_set_version_id": "7810032a-220f-4de6-b9a1-be17779d2610",
+    "model_version_id": "d564507a-4d18-440a-9e89-3cda58c95434",
+    "embedding_model_version_id": "323a1f02-360f-4464-85ac-e8008ca8b022",
+    "policy_version_id": "784f303a-7c00-436d-b2b4-246b017fdb65",
+    "audience_definition_version_id": "de353c32-09c4-4770-abc7-e023d18ff8c6",
+    "lineage_resolution_mode": "resolved_versioned",
+    "lineage_resolution_reasons": [],
+    "lineage_resolution_timestamp": "2026-04-11T09:11:55.659911+00:00",
     "lineage_resolution_strict_expected": false,
-    "lineage_resolution_degraded": true,
-    "profile_id": "local_snapshot_local_export"
+    "lineage_resolution_degraded": false,
+    "profile_id": "clickhouse_postgres_export",
+    "implementation_status": "implemented"
   },
   "versions": {
     "fs_version": "fs_credit_v1",
@@ -32,26 +31,121 @@
     "model_version": "nomic-embed-text",
     "policy_version": "policy_credit_v1",
     "index_alias": "audience-serving",
-    "concrete_qdrant_collection": "audience-serving-fs_credit_v1-deadbeef",
-    "run_id": "e0f62885-0dbc-4d53-b1d5-59fd0be558e2",
-    "campaign_id": "camp_test"
+    "concrete_qdrant_collection": "audience-serving-fs_credit_v1-d4e980fa",
+    "run_id": "d4e980fa-746e-464e-8b7a-71826cab824e",
+    "campaign_id": "camp_ops_001"
+  },
+  "inputs": {
+    "raw_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\synthetic_customers.jsonl",
+    "feature_mart_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\feature_mart_snapshot.jsonl",
+    "embeddings_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\embeddings.jsonl",
+    "blacklist_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\blacklist.txt",
+    "comm_history_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\comm_history.jsonl"
   },
   "quality": {
-    "status": "failed",
+    "status": "passed",
     "checks": [
       {
-        "status": "passed"
+        "status": "passed",
+        "dataset": "raw",
+        "path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\synthetic_customers.jsonl",
+        "contract": "D:\\AudienceEngine\\governance\\contracts\\raw.yaml",
+        "record_count": 200,
+        "required_fields_checked": [
+          "customer_id",
+          "event_ts"
+        ],
+        "required_versions_checked": []
       },
       {
-        "status": "passed"
+        "status": "passed",
+        "dataset": "feature_mart",
+        "path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\feature_mart_snapshot.jsonl",
+        "contract": "D:\\AudienceEngine\\governance\\contracts\\feature_mart.yaml",
+        "record_count": 5,
+        "required_fields_checked": [
+          "customer_id",
+          "fs_version",
+          "customer_age_years",
+          "customer_tenure_months",
+          "credit_score_band",
+          "delinquency_12m_count",
+          "utilization_ratio_avg_3m",
+          "card_spend_total_3m",
+          "digital_engagement_score",
+          "is_employee_flag",
+          "do_not_contact_flag"
+        ],
+        "required_versions_checked": [
+          "fs_version",
+          "policy_version"
+        ]
       },
       {
-        "status": "passed"
+        "status": "passed",
+        "dataset": "embeddings",
+        "path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\embeddings.jsonl",
+        "record_count": 5,
+        "vector_size": 768,
+        "emb_version": "fs_credit_v1+prompt_credit_v1+nomic-embed-text"
       }
-    ],
-    "error": {
-      "code": "RUN_FAILED_INTERNAL",
-      "detail": "Embedding lineage mismatch at runtime: bundle.emb_version='fs_credit_v1+prompt_credit_v1+nomic-embed-text', runtime.emb_version='fs_credit_v1+prompt_credit_v1+other-model-v2'"
+    ]
+  },
+  "index": {
+    "stage": "promote_alias",
+    "alias": "audience-serving",
+    "collection": "audience-serving-fs_credit_v1-d4e980fa",
+    "previous_collection": "audience-serving-fs_credit_v1-dc8d3ca1"
+  },
+  "retrieval": {
+    "query_customer_id": "cust_00000",
+    "retrieved_count": 5
+  },
+  "policy": {
+    "status": "ok",
+    "fail_closed": false,
+    "total_candidates": 5,
+    "approved_count": 5,
+    "rejected_count": 0,
+    "reject_reason_counts": {},
+    "requested_size": 20,
+    "selected_count": 5
+  },
+  "export_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\approved_audience.jsonl",
+  "export_minio_uri": null,
+  "export": {
+    "target_id": "postgres_export_table",
+    "export_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\approved_audience.jsonl",
+    "export_uri": null,
+    "status": "written_and_persisted",
+    "postgres_table": "public.audience_export_staging",
+    "rows_attempted": 5,
+    "rows_written": 5,
+    "rows_skipped_conflict": 0,
+    "profile_id": "clickhouse_postgres_export",
+    "source_id": "clickhouse_feature_slice",
+    "export_id": "postgres_export_table",
+    "profile_status": "implemented"
+  },
+  "delivery": {
+    "delivery_job_id": "92d002b9-6b18-4646-9bcb-6f34ff5415b7",
+    "run_id": "d4e980fa-746e-464e-8b7a-71826cab824e",
+    "campaign_id": "camp_ops_001",
+    "delivery_target_id": "crm_csv_file",
+    "status": "delivered",
+    "source_row_count": 5,
+    "rows_materialized": 5,
+    "rows_delivered": 5,
+    "rows_skipped_conflict": 0,
+    "artifact_uri": "D:\\AudienceEngine\\data\\minimal_slice\\delivery\\crm_csv_file\\run_id=d4e980fa-746e-464e-8b7a-71826cab824e\\delivery_job_id=92d002b9-6b18-4646-9bcb-6f34ff5415b7\\crm_delivery_audience.csv",
+    "completed_at": "2026-04-11T09:12:06.023867+00:00"
+  },
+  "audit": {
+    "postgres": {
+      "run_table": "audience_run",
+      "selected_rows_written": 5,
+      "rejection_summary_rows_written": 0,
+      "policy_decision_rows_written": 5
     }
   }
 }
