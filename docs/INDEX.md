@@ -26,6 +26,9 @@ This is the canonical table of contents for `docs/`.
 - [UAT_ROLE_FLOWS.md](UAT_ROLE_FLOWS.md)
 - [UAT_SCENARIOS.md](UAT_SCENARIOS.md)
 
+## Internal User Guides
+- [internal_user_guides/INDEX.md](internal_user_guides/INDEX.md)
+
 ## Policy Engine
 - [POLICY_ENGINE_SPEC.md](POLICY_ENGINE_SPEC.md) (canonical policy spec)
 
