@@ -1,0 +1,205 @@
+{% set ROLE_SURFACE_MAP = [
+  {
+    "role": "Campaign User",
+    "focus": "Run approved campaigns and confirm delivery status.",
+    "surfaces": [
+      {
+        "path": "/operator/trigger-run",
+        "label": "Trigger Run",
+        "action": "Launch a campaign with approved defaults or explicit governed overrides."
+      },
+      {
+        "path": "/operator/recent-runs",
+        "label": "Recent Runs",
+        "action": "Check run status, policy outcome, and export or delivery completion."
+      },
+      {
+        "path": "/operator/delivery",
+        "label": "Delivery",
+        "action": "Confirm delivered rows and review per-run delivery records."
+      }
+    ]
+  },
+  {
+    "role": "Data Engineer",
+    "focus": "Validate defaults and integration readiness before execution.",
+    "surfaces": [
+      {
+        "path": "/operator/defaults",
+        "label": "Defaults",
+        "action": "Inspect and set default policy, integration profile, and delivery target."
+      },
+      {
+        "path": "/operator/readiness",
+        "label": "Integrations / Readiness",
+        "action": "Review runtime_runnable and readiness mode for connectors and profiles."
+      },
+      {
+        "path": "/operator/control-plane/versions",
+        "label": "Control-Plane Versions",
+        "action": "Inspect feature, policy, and audience definition version lifecycle states."
+      }
+    ]
+  },
+  {
+    "role": "ML Analyst",
+    "focus": "Review model and policy governance before activating changes.",
+    "surfaces": [
+      {
+        "path": "/operator/control-plane/versions",
+        "label": "Control-Plane Versions",
+        "action": "Review embedding or model versions and inspect governance readiness or blockers."
+      },
+      {
+        "path": "/operator/explain-audit",
+        "label": "Explain / Audit",
+        "action": "Inspect policy decisions and audit evidence for specific run or customer cases."
+      },
+      {
+        "path": "/operator/readiness",
+        "label": "Integrations / Readiness",
+        "action": "Validate runtime compatibility before recommending promotion."
+      }
+    ]
+  },
+  {
+    "role": "Admin/Operator",
+    "focus": "Own active defaults, lifecycle actions, and controlled promotion or rollback.",
+    "surfaces": [
+      {
+        "path": "/operator/dashboard",
+        "label": "Dashboard",
+        "action": "Start from readiness snapshot, selected defaults, and primary orchestration entrypoint."
+      },
+      {
+        "path": "/operator/control-plane/versions",
+        "label": "Control-Plane Versions",
+        "action": "Execute validated lifecycle transitions and record governance evidence."
+      },
+      {
+        "path": "/operator/explain-audit",
+        "label": "Explain / Audit",
+        "action": "Review lifecycle and delivery audit records during incident response."
+      }
+    ]
+  }
+] %}
+
+{% set PAGE_GUIDANCE = {
+  "/operator/dashboard": {
+    "title": "Journey: Start Here",
+    "summary": "Use this snapshot to confirm runnable paths before changing defaults or triggering runs.",
+    "steps": [
+      "Confirm at least one runnable integration profile and delivery target.",
+      "Verify selected defaults match the current campaign or UAT objective.",
+      "Open Trigger Run for execution or Control-Plane Versions for lifecycle/governance review."
+    ]
+  },
+  "/operator/defaults": {
+    "title": "Journey: Inspect Defaults",
+    "summary": "Defaults are the baseline for both API-triggered and UI-triggered runs.",
+    "steps": [
+      "Verify default policy version is approved for this test window.",
+      "Choose implemented integration and delivery defaults only.",
+      "Save and then trigger a run to verify the new default path behaves as expected."
+    ]
+  },
+  "/operator/control-plane/versions": {
+    "title": "Journey: Inspect Versions and Governance",
+    "summary": "Use list and detail views to inspect lifecycle state and activation blockers before promotion.",
+    "steps": [
+      "Filter by entity family and key to locate the exact version under review.",
+      "Open detail to inspect promotion readiness checks, blockers, and non-blocking gaps.",
+      "Record evidence first, then run lifecycle actions only when governance is ready."
+    ]
+  },
+  "/operator/trigger-run": {
+    "title": "Journey: Trigger a Run",
+    "summary": "Trigger uses saved defaults unless you provide explicit override values.",
+    "steps": [
+      "Enter campaign_id and requested_size for the test.",
+      "Leave overrides blank for default-path testing, or set approved version overrides.",
+      "After completion, validate outcome in Recent Runs and Delivery."
+    ]
+  },
+  "/operator/recent-runs": {
+    "title": "Journey: Review Recent Runs",
+    "summary": "Use this table to validate run status and identify follow-up pages for deeper checks.",
+    "steps": [
+      "Check run status and last failure first for quick triage.",
+      "Validate policy/integration/delivery versions match expected defaults or overrides.",
+      "If needed, open Delivery and Explain/Audit for deeper evidence."
+    ]
+  },
+  "/operator/delivery": {
+    "title": "Journey: Review Delivery",
+    "summary": "Use run_id filtering to trace job, attempt, and record-level delivery outcomes.",
+    "steps": [
+      "Filter by run_id when verifying a specific campaign test.",
+      "Compare rows attempted, delivered, and skipped for integrity checks.",
+      "If missing records or failures appear, cross-check Recent Runs and readiness state."
+    ]
+  },
+  "/operator/explain-audit": {
+    "title": "Journey: Explain and Audit",
+    "summary": "Use this page for policy explain lookups and governance/lifecycle audit review.",
+    "steps": [
+      "Lookup policy decision with run_id plus customer_id for explain detail.",
+      "Review lifecycle audit actions for promotion or rollback traceability.",
+      "Review delivery audit attempts to confirm downstream execution evidence."
+    ]
+  },
+  "/operator/readiness": {
+    "title": "Journey: Check Readiness",
+    "summary": "Use runtime_runnable and readiness_mode to separate blockers from planning-only entries.",
+    "steps": [
+      "Confirm required integration profile and delivery target are runtime_runnable=true.",
+      "Treat not_implemented entries as non-runnable and out of current UAT scope.",
+      "Resolve readiness blockers before triggering runs or promoting new defaults."
+    ]
+  },
+  "_default": {
+    "title": "Journey Guidance",
+    "summary": "Use role entry points to choose the right page for your current UAT task.",
+    "steps": [
+      "Select the surface aligned to your role and objective.",
+      "Capture blockers with exact run_id or version_id context.",
+      "Use Explain/Audit and Control-Plane detail pages for evidence-backed decisions."
+    ]
+  }
+} %}
+
+{% macro render_role_surface_guidance(active_nav) -%}
+<div class="role-surface-list" data-testid="role-surface-guidance">
+  {% for role_map in ROLE_SURFACE_MAP %}
+  <article class="role-surface-card">
+    <h3>{{ role_map.role }}</h3>
+    <p class="quiet">{{ role_map.focus }}</p>
+    <ul class="compact-list">
+      {% for surface in role_map.surfaces %}
+      <li>
+        <a href="{{ surface.path }}">{{ surface.label }}</a>
+        {% if surface.path == active_nav %}
+        <span class="chip implemented">You are here</span>
+        {% endif %}
+        <span class="quiet">{{ surface.action }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </article>
+  {% endfor %}
+</div>
+{%- endmacro %}
+
+{% macro render_page_journey_guidance(active_nav) -%}
+{% set journey = PAGE_GUIDANCE.get(active_nav, PAGE_GUIDANCE["_default"]) %}
+<section class="panel journey-panel" data-testid="journey-guidance">
+  <h2>{{ journey.title }}</h2>
+  <p class="quiet">{{ journey.summary }}</p>
+  <ul class="compact-list">
+    {% for step in journey.steps %}
+    <li>{{ step }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{%- endmacro %}

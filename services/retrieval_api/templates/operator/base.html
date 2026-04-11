@@ -1,3 +1,4 @@
+{% import "operator/partials/role_guidance.html" as role_guidance %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -41,9 +42,18 @@
         {% endif %}
       </nav>
       <section class="legend">
+        <h2>Role Entry Points</h2>
+        {{ role_guidance.render_role_surface_guidance(active_nav) }}
+      </section>
+      <section class="legend">
         <h2>Status Legend</h2>
         <p><span class="chip implemented">Implemented</span> Runtime-capable path in this build.</p>
         <p><span class="chip planned">Planned</span> Visible for roadmap clarity and intentionally disabled in operator forms.</p>
+      </section>
+      <section class="legend">
+        <h2>UAT Docs</h2>
+        <p>Role flows: <code>docs/UAT_ROLE_FLOWS.md</code></p>
+        <p>Scenario checklist: <code>docs/UAT_SCENARIOS.md</code></p>
       </section>
     </aside>
 
@@ -54,6 +64,7 @@
       {% if error_message %}
       <div class="alert error"><pre>{{ error_message }}</pre></div>
       {% endif %}
+      {{ role_guidance.render_page_journey_guidance(active_nav) }}
       {% block content %}{% endblock %}
     </main>
   </div>

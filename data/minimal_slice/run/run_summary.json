@@ -1,5 +1,5 @@
 {
-  "run_ts": "2026-04-11T12:35:48.763032+00:00",
+  "run_ts": "2026-04-11T13:26:28.099431+00:00",
   "status": "ok",
   "operations": {
     "policy_version": "policy_credit_v1",
@@ -24,7 +24,7 @@
     "capability": "embedding",
     "lineage_resolution_mode": "resolved_versioned",
     "lineage_resolution_reasons": [],
-    "lineage_resolution_timestamp": "2026-04-11T12:35:40.587680+00:00",
+    "lineage_resolution_timestamp": "2026-04-11T13:26:19.431722+00:00",
     "lineage_resolution_strict_expected": false,
     "lineage_resolution_degraded": false,
     "profile_id": "clickhouse_postgres_export",
@@ -36,9 +36,9 @@
     "model_version": "nomic-embed-text",
     "policy_version": "policy_credit_v1",
     "index_alias": "audience-serving",
-    "concrete_qdrant_collection": "audience-serving-fs_credit_v1-07e65af2",
-    "run_id": "07e65af2-73cd-479e-8493-4dcc51a3257c",
-    "campaign_id": "camp_ops_004"
+    "concrete_qdrant_collection": "audience-serving-fs_credit_v1-e0f72877",
+    "run_id": "e0f72877-7dde-40fe-b452-69d2308cf4e2",
+    "campaign_id": "camp_ops_005"
   },
   "inputs": {
     "raw_path": "D:\\AudienceEngine\\data\\minimal_slice\\run\\synthetic_customers.jsonl",
@@ -99,8 +99,8 @@
   "index": {
     "stage": "promote_alias",
     "alias": "audience-serving",
-    "collection": "audience-serving-fs_credit_v1-07e65af2",
-    "previous_collection": "audience-serving-fs_credit_v1-8843657b"
+    "collection": "audience-serving-fs_credit_v1-e0f72877",
+    "previous_collection": "audience-serving-fs_credit_v1-07e65af2"
   },
   "retrieval": {
     "query_customer_id": "cust_00000",
@@ -133,17 +133,17 @@
     "profile_status": "implemented"
   },
   "delivery": {
-    "delivery_job_id": "b7e59268-1d34-4826-8cf5-fbabc670c42c",
-    "run_id": "07e65af2-73cd-479e-8493-4dcc51a3257c",
-    "campaign_id": "camp_ops_004",
+    "delivery_job_id": "81cc0be3-72b5-4863-b193-60376aa15e71",
+    "run_id": "e0f72877-7dde-40fe-b452-69d2308cf4e2",
+    "campaign_id": "camp_ops_005",
     "delivery_target_id": "crm_csv_file",
     "status": "delivered",
     "source_row_count": 5,
     "rows_materialized": 5,
     "rows_delivered": 5,
     "rows_skipped_conflict": 0,
-    "artifact_uri": "D:\\AudienceEngine\\data\\minimal_slice\\delivery\\crm_csv_file\\run_id=07e65af2-73cd-479e-8493-4dcc51a3257c\\delivery_job_id=b7e59268-1d34-4826-8cf5-fbabc670c42c\\crm_delivery_audience.csv",
-    "completed_at": "2026-04-11T12:35:49.371955+00:00"
+    "artifact_uri": "D:\\AudienceEngine\\data\\minimal_slice\\delivery\\crm_csv_file\\run_id=e0f72877-7dde-40fe-b452-69d2308cf4e2\\delivery_job_id=81cc0be3-72b5-4863-b193-60376aa15e71\\crm_delivery_audience.csv",
+    "completed_at": "2026-04-11T13:26:28.725725+00:00"
   },
   "audit": {
     "postgres": {

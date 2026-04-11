@@ -111,6 +111,36 @@ body {
   margin: 0 0 0.5rem 0;
 }
 
+.role-surface-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.role-surface-card {
+  border: 1px solid #d6e2ee;
+  border-radius: 8px;
+  background: #fcfeff;
+  padding: 0.55rem;
+}
+
+.role-surface-card h3 {
+  font-size: 0.82rem;
+  margin: 0 0 0.3rem 0;
+}
+
+.role-surface-card ul {
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.role-surface-card li {
+  margin-bottom: 0.25rem;
+}
+
+.role-surface-card a {
+  color: #0f4e6d;
+}
+
 .content {
   padding: 1rem 1.2rem;
 }
@@ -131,6 +161,10 @@ body {
 .panel h3 {
   margin: 0.8rem 0 0.35rem 0;
   font-size: 0.9rem;
+}
+
+.journey-panel {
+  border-left: 4px solid #9ec8dc;
 }
 
 .quick-start {

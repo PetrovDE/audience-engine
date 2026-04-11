@@ -18,6 +18,13 @@ This is the canonical table of contents for `docs/`.
 ## Governance
 - [GOVERNANCE.md](GOVERNANCE.md) (canonical governance and VersionBundle contract)
 - [AUDIT.md](AUDIT.md)
+- [ROLE_GUIDES.md](ROLE_GUIDES.md)
+- [CONTROL_PLANE_V1.md](CONTROL_PLANE_V1.md)
+- [CHANGE_MANAGEMENT.md](CHANGE_MANAGEMENT.md)
+
+## UAT Guides
+- [UAT_ROLE_FLOWS.md](UAT_ROLE_FLOWS.md)
+- [UAT_SCENARIOS.md](UAT_SCENARIOS.md)
 
 ## Policy Engine
 - [POLICY_ENGINE_SPEC.md](POLICY_ENGINE_SPEC.md) (canonical policy spec)
