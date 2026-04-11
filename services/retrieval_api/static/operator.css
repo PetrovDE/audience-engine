@@ -277,6 +277,62 @@ pre {
   background: var(--planned-bg);
 }
 
+.state-chip {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.15rem 0.52rem;
+  font-size: 0.75rem;
+  text-transform: lowercase;
+  border: 1px solid transparent;
+}
+
+.state-draft {
+  background: #edf2f7;
+  color: #32465a;
+  border-color: #d2dee9;
+}
+
+.state-validated {
+  background: #e6f3fb;
+  color: #064f73;
+  border-color: #b7d5e9;
+}
+
+.state-active {
+  background: #e8f6ec;
+  color: #0f6135;
+  border-color: #b9dfc7;
+}
+
+.state-deprecated {
+  background: #fff4e3;
+  color: #804700;
+  border-color: #efd2ae;
+}
+
+.state-retired {
+  background: #f6ecf2;
+  color: #6f2a50;
+  border-color: #dcc0d0;
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+
+.action-row form {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .alert {
   border-radius: 8px;
   border: 1px solid transparent;

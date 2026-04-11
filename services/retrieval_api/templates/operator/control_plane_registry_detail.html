@@ -1,0 +1,85 @@
+{% extends "operator/base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>{{ entity_label }} Detail</h2>
+  <p><a href="/operator/control-plane/versions?entity_type={{ entity_type }}&entity_key={{ entity_key }}">Back to list</a></p>
+  <dl class="kv">
+    <dt>Entity family</dt>
+    <dd>{{ entity_label }} ({{ entity_type }})</dd>
+    <dt>Entity key</dt>
+    <dd>{{ entity_key }}</dd>
+    <dt>Version id</dt>
+    <dd>{{ version_row.version_id }}</dd>
+    <dt>Version</dt>
+    <dd>{{ version_row.version }}</dd>
+    <dt>Lifecycle state</dt>
+    <dd><span class="state-chip state-{{ version_row.lifecycle_state }}">{{ version_row.lifecycle_state }}</span></dd>
+    <dt>Current active</dt>
+    <dd>
+      {% if version_row.is_current_active %}
+      <span class="chip implemented">Yes</span>
+      {% else %}
+      <span class="quiet">No</span>
+      {% endif %}
+    </dd>
+    <dt>Current active version id</dt>
+    <dd>{{ active_version_id or "none" }}</dd>
+  </dl>
+</section>
+
+<section class="panel">
+  <h2>Important Metadata</h2>
+  {% if version_row.important_metadata %}
+  <pre>{{ version_row.important_metadata | json_pretty }}</pre>
+  {% else %}
+  <p class="empty">No important metadata fields are currently set for this version.</p>
+  {% endif %}
+  <h3>Payload</h3>
+  <pre>{{ version_row.payload | json_pretty }}</pre>
+</section>
+
+<section class="panel">
+  <h2>Lifecycle Actions</h2>
+  <p class="quiet">Actions are explicit and mapped to centralized lifecycle transitions.</p>
+  <div class="action-row">
+    {% for action in action_controls %}
+    <form method="post" action="/operator/control-plane/versions/{{ entity_type }}/{{ entity_key }}/{{ version_id }}/actions/{{ action.action_name }}">
+      <button class="button {% if action.action_name in ('deprecate', 'retire') %}secondary{% endif %}" type="submit" {% if not action.enabled %}disabled{% endif %}>{{ action.label }}</button>
+      <span class="quiet">target={{ action.target_state }}</span>
+    </form>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Recent Actions For {{ entity_key }}</h2>
+  {% if recent_actions %}
+  <table>
+    <thead>
+      <tr>
+        <th>Timestamp</th>
+        <th>Action</th>
+        <th>Target State</th>
+        <th>Outcome</th>
+        <th>Actor</th>
+        <th>Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in recent_actions %}
+      <tr>
+        <td>{{ row.get("action_ts", "unknown") }}</td>
+        <td>{{ row.get("action", "unknown") }}</td>
+        <td>{{ row.get("target_state", "unknown") }}</td>
+        <td>{{ row.get("outcome", "unknown") }}</td>
+        <td>{{ row.get("actor_id", "unknown") }}</td>
+        <td><pre>{{ row.get("details", {}) | json_pretty }}</pre></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No actions recorded for this entity key yet.</p>
+  {% endif %}
+</section>
+{% endblock %}
