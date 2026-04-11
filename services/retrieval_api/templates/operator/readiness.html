@@ -1,27 +1,27 @@
 {% extends "operator/base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>Readiness Interpretation</h2>
-  <p><code>runtime_runnable=true</code> means operator-safe now. Readiness mode is displayed honestly:</p>
+  <h2>{{ t("readiness.interpretation_title") }}</h2>
+  <p>{{ t("readiness.interpretation_intro") }}</p>
   <ul>
-    <li><code>config_only</code>: config validation only.</li>
-    <li><code>config_and_connectivity</code>: config validation + live probe.</li>
-    <li><code>not_implemented</code>: planned or disabled for runtime use.</li>
+    <li><code>config_only</code>: {{ t("readiness.mode.config_only") }}</li>
+    <li><code>config_and_connectivity</code>: {{ t("readiness.mode.config_and_connectivity") }}</li>
+    <li><code>not_implemented</code>: {{ t("readiness.mode.not_implemented") }}</li>
   </ul>
 </section>
 
 <section class="panel">
-  <h2>Integration Profiles</h2>
+  <h2>{{ t("readiness.integration_profiles") }}</h2>
   {% set profiles = integrations_payload.get("profiles", []) %}
   {% if profiles %}
   <table>
     <thead>
       <tr>
-        <th>profile_id</th>
-        <th>status</th>
-        <th>runnable</th>
-        <th>readiness_mode</th>
-        <th>validation_errors</th>
+        <th>{{ t("readiness.headers.profile_id") }}</th>
+        <th>{{ t("readiness.headers.status") }}</th>
+        <th>{{ t("readiness.headers.runnable") }}</th>
+        <th>{{ t("readiness.headers.readiness_mode") }}</th>
+        <th>{{ t("readiness.headers.validation_errors") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -30,7 +30,13 @@
         <td>{{ row.get("profile_id", "") }}</td>
         <td>
           <span class="chip {% if row.get('implementation_status') == 'implemented' %}implemented{% else %}planned{% endif %}">
-            {{ row.get("implementation_status", "unknown") }}
+            {% if row.get("implementation_status") == "implemented" %}
+            {{ t("status.implemented") }}
+            {% elif row.get("implementation_status") == "planned" %}
+            {{ t("status.planned") }}
+            {% else %}
+            {{ row.get("implementation_status", t("common.unknown")) }}
+            {% endif %}
           </span>
         </td>
         <td>{{ row.get("runtime_runnable") }}</td>
@@ -41,22 +47,22 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No integration profiles available.</p>
+  <p class="empty">{{ t("readiness.empty_profiles") }}</p>
   {% endif %}
 </section>
 
 <section class="panel">
-  <h2>Source Connectors</h2>
+  <h2>{{ t("readiness.source_connectors") }}</h2>
   {% set sources = integrations_payload.get("sources", []) %}
   {% if sources %}
   <table>
     <thead>
       <tr>
-        <th>source_id</th>
-        <th>status</th>
-        <th>runnable</th>
-        <th>readiness_mode</th>
-        <th>validation_errors</th>
+        <th>{{ t("readiness.headers.source_id") }}</th>
+        <th>{{ t("readiness.headers.status") }}</th>
+        <th>{{ t("readiness.headers.runnable") }}</th>
+        <th>{{ t("readiness.headers.readiness_mode") }}</th>
+        <th>{{ t("readiness.headers.validation_errors") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -65,7 +71,13 @@
         <td>{{ row.get("source_id", "") }}</td>
         <td>
           <span class="chip {% if row.get('implementation_status') == 'implemented' %}implemented{% else %}planned{% endif %}">
-            {{ row.get("implementation_status", "unknown") }}
+            {% if row.get("implementation_status") == "implemented" %}
+            {{ t("status.implemented") }}
+            {% elif row.get("implementation_status") == "planned" %}
+            {{ t("status.planned") }}
+            {% else %}
+            {{ row.get("implementation_status", t("common.unknown")) }}
+            {% endif %}
           </span>
         </td>
         <td>{{ row.get("runtime_runnable") }}</td>
@@ -76,22 +88,22 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No source connectors available.</p>
+  <p class="empty">{{ t("readiness.empty_sources") }}</p>
   {% endif %}
 </section>
 
 <section class="panel">
-  <h2>Export Targets</h2>
+  <h2>{{ t("readiness.export_targets") }}</h2>
   {% set exports = integrations_payload.get("exports", []) %}
   {% if exports %}
   <table>
     <thead>
       <tr>
-        <th>export_id</th>
-        <th>status</th>
-        <th>runnable</th>
-        <th>readiness_mode</th>
-        <th>validation_errors</th>
+        <th>{{ t("readiness.headers.export_id") }}</th>
+        <th>{{ t("readiness.headers.status") }}</th>
+        <th>{{ t("readiness.headers.runnable") }}</th>
+        <th>{{ t("readiness.headers.readiness_mode") }}</th>
+        <th>{{ t("readiness.headers.validation_errors") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -100,7 +112,13 @@
         <td>{{ row.get("export_id", "") }}</td>
         <td>
           <span class="chip {% if row.get('implementation_status') == 'implemented' %}implemented{% else %}planned{% endif %}">
-            {{ row.get("implementation_status", "unknown") }}
+            {% if row.get("implementation_status") == "implemented" %}
+            {{ t("status.implemented") }}
+            {% elif row.get("implementation_status") == "planned" %}
+            {{ t("status.planned") }}
+            {% else %}
+            {{ row.get("implementation_status", t("common.unknown")) }}
+            {% endif %}
           </span>
         </td>
         <td>{{ row.get("runtime_runnable") }}</td>
@@ -111,21 +129,21 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No export targets available.</p>
+  <p class="empty">{{ t("readiness.empty_exports") }}</p>
   {% endif %}
 </section>
 
 <section class="panel">
-  <h2>Delivery Targets</h2>
+  <h2>{{ t("readiness.delivery_targets") }}</h2>
   {% if delivery_targets %}
   <table>
     <thead>
       <tr>
-        <th>delivery_target_id</th>
-        <th>status</th>
-        <th>runnable</th>
-        <th>readiness_mode</th>
-        <th>validation_errors</th>
+        <th>{{ t("readiness.headers.delivery_target_id") }}</th>
+        <th>{{ t("readiness.headers.status") }}</th>
+        <th>{{ t("readiness.headers.runnable") }}</th>
+        <th>{{ t("readiness.headers.readiness_mode") }}</th>
+        <th>{{ t("readiness.headers.validation_errors") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -134,7 +152,13 @@
         <td>{{ row.get("delivery_target_id", "") }}</td>
         <td>
           <span class="chip {% if row.get('implementation_status') == 'implemented' %}implemented{% else %}planned{% endif %}">
-            {{ row.get("implementation_status", "unknown") }}
+            {% if row.get("implementation_status") == "implemented" %}
+            {{ t("status.implemented") }}
+            {% elif row.get("implementation_status") == "planned" %}
+            {{ t("status.planned") }}
+            {% else %}
+            {{ row.get("implementation_status", t("common.unknown")) }}
+            {% endif %}
           </span>
         </td>
         <td>{{ row.get("runtime_runnable") }}</td>
@@ -145,7 +169,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No delivery targets available.</p>
+  <p class="empty">{{ t("readiness.empty_delivery_targets") }}</p>
   {% endif %}
 </section>
 {% endblock %}

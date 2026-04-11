@@ -1,89 +1,89 @@
 {% set ROLE_SURFACE_MAP = [
   {
     "role_key": "campaign_user",
-    "role": "Campaign User",
-    "focus": "Run approved campaigns and confirm delivery status.",
+    "role_label_key": "role.campaign_user",
+    "focus_key": "role_guidance.focus.campaign_user",
     "surfaces": [
       {
         "path": "/operator/trigger-run",
-        "label": "Trigger Run",
-        "action": "Launch a campaign with approved defaults or explicit governed overrides."
+        "label_key": "nav.trigger_run",
+        "action_key": "role_guidance.action.campaign.trigger_run"
       },
       {
         "path": "/operator/recent-runs",
-        "label": "Recent Runs",
-        "action": "Check run status, policy outcome, and export or delivery completion."
+        "label_key": "nav.recent_runs",
+        "action_key": "role_guidance.action.campaign.recent_runs"
       },
       {
         "path": "/operator/delivery",
-        "label": "Delivery",
-        "action": "Confirm delivered rows and review per-run delivery records."
+        "label_key": "nav.delivery",
+        "action_key": "role_guidance.action.campaign.delivery"
       }
     ]
   },
   {
     "role_key": "data_engineer",
-    "role": "Data Engineer",
-    "focus": "Validate defaults and integration readiness before execution.",
+    "role_label_key": "role.data_engineer",
+    "focus_key": "role_guidance.focus.data_engineer",
     "surfaces": [
       {
         "path": "/operator/defaults",
-        "label": "Defaults",
-        "action": "Inspect and set default policy, integration profile, and delivery target."
+        "label_key": "nav.defaults",
+        "action_key": "role_guidance.action.data_engineer.defaults"
       },
       {
         "path": "/operator/readiness",
-        "label": "Integrations / Readiness",
-        "action": "Review runtime_runnable and readiness mode for connectors and profiles."
+        "label_key": "nav.readiness",
+        "action_key": "role_guidance.action.data_engineer.readiness"
       },
       {
         "path": "/operator/control-plane/versions",
-        "label": "Control-Plane Versions",
-        "action": "Inspect feature, policy, and audience definition version lifecycle states."
+        "label_key": "nav.control_plane_versions",
+        "action_key": "role_guidance.action.data_engineer.control_plane"
       }
     ]
   },
   {
     "role_key": "ml_analyst",
-    "role": "ML Analyst",
-    "focus": "Review model and policy governance before activating changes.",
+    "role_label_key": "role.ml_analyst",
+    "focus_key": "role_guidance.focus.ml_analyst",
     "surfaces": [
       {
         "path": "/operator/control-plane/versions",
-        "label": "Control-Plane Versions",
-        "action": "Review embedding or model versions and inspect governance readiness or blockers."
+        "label_key": "nav.control_plane_versions",
+        "action_key": "role_guidance.action.ml_analyst.control_plane"
       },
       {
         "path": "/operator/explain-audit",
-        "label": "Explain / Audit",
-        "action": "Inspect policy decisions and audit evidence for specific run or customer cases."
+        "label_key": "nav.explain_audit",
+        "action_key": "role_guidance.action.ml_analyst.explain"
       },
       {
         "path": "/operator/readiness",
-        "label": "Integrations / Readiness",
-        "action": "Validate runtime compatibility before recommending promotion."
+        "label_key": "nav.readiness",
+        "action_key": "role_guidance.action.ml_analyst.readiness"
       }
     ]
   },
   {
     "role_key": "admin_operator",
-    "role": "Admin/Operator",
-    "focus": "Own active defaults, lifecycle actions, and controlled promotion or rollback.",
+    "role_label_key": "role.admin_operator",
+    "focus_key": "role_guidance.focus.admin_operator",
     "surfaces": [
       {
         "path": "/operator/dashboard",
-        "label": "Dashboard",
-        "action": "Start from readiness snapshot, selected defaults, and primary orchestration entrypoint."
+        "label_key": "nav.dashboard",
+        "action_key": "role_guidance.action.admin.dashboard"
       },
       {
         "path": "/operator/control-plane/versions",
-        "label": "Control-Plane Versions",
-        "action": "Execute validated lifecycle transitions and record governance evidence."
+        "label_key": "nav.control_plane_versions",
+        "action_key": "role_guidance.action.admin.control_plane"
       },
       {
         "path": "/operator/explain-audit",
-        "label": "Explain / Audit",
-        "action": "Review lifecycle and delivery audit records during incident response."
+        "label_key": "nav.explain_audit",
+        "action_key": "role_guidance.action.admin.explain"
       }
     ]
   }
@@ -91,84 +91,84 @@
 
 {% set PAGE_GUIDANCE = {
   "/operator/dashboard": {
-    "title": "Journey: Start Here",
-    "summary": "Use this snapshot to confirm runnable paths before changing defaults or triggering runs.",
+    "title_key": "journey.dashboard.title",
+    "summary_key": "journey.dashboard.summary",
     "steps": [
-      "Confirm at least one runnable integration profile and delivery target.",
-      "Verify selected defaults match the current campaign or UAT objective.",
-      "Open Trigger Run for execution or Control-Plane Versions for lifecycle/governance review."
+      "journey.dashboard.step_1",
+      "journey.dashboard.step_2",
+      "journey.dashboard.step_3"
     ]
   },
   "/operator/defaults": {
-    "title": "Journey: Inspect Defaults",
-    "summary": "Defaults are the baseline for both API-triggered and UI-triggered runs.",
+    "title_key": "journey.defaults.title",
+    "summary_key": "journey.defaults.summary",
     "steps": [
-      "Verify default policy version is approved for this test window.",
-      "Choose implemented integration and delivery defaults only.",
-      "Save and then trigger a run to verify the new default path behaves as expected."
+      "journey.defaults.step_1",
+      "journey.defaults.step_2",
+      "journey.defaults.step_3"
     ]
   },
   "/operator/control-plane/versions": {
-    "title": "Journey: Inspect Versions and Governance",
-    "summary": "Use list and detail views to inspect lifecycle state and activation blockers before promotion.",
+    "title_key": "journey.control_plane.title",
+    "summary_key": "journey.control_plane.summary",
     "steps": [
-      "Filter by entity family and key to locate the exact version under review.",
-      "Open detail to inspect promotion readiness checks, blockers, and non-blocking gaps.",
-      "Record evidence first, then run lifecycle actions only when governance is ready."
+      "journey.control_plane.step_1",
+      "journey.control_plane.step_2",
+      "journey.control_plane.step_3"
     ]
   },
   "/operator/trigger-run": {
-    "title": "Journey: Trigger a Run",
-    "summary": "Trigger uses saved defaults unless you provide explicit override values.",
+    "title_key": "journey.trigger_run.title",
+    "summary_key": "journey.trigger_run.summary",
     "steps": [
-      "Enter campaign_id and requested_size for the test.",
-      "Leave overrides blank for default-path testing, or set approved version overrides.",
-      "After completion, validate outcome in Recent Runs and Delivery."
+      "journey.trigger_run.step_1",
+      "journey.trigger_run.step_2",
+      "journey.trigger_run.step_3"
     ]
   },
   "/operator/recent-runs": {
-    "title": "Journey: Review Recent Runs",
-    "summary": "Use this table to validate run status and identify follow-up pages for deeper checks.",
+    "title_key": "journey.recent_runs.title",
+    "summary_key": "journey.recent_runs.summary",
     "steps": [
-      "Check run status and last failure first for quick triage.",
-      "Validate policy/integration/delivery versions match expected defaults or overrides.",
-      "If needed, open Delivery and Explain/Audit for deeper evidence."
+      "journey.recent_runs.step_1",
+      "journey.recent_runs.step_2",
+      "journey.recent_runs.step_3"
     ]
   },
   "/operator/delivery": {
-    "title": "Journey: Review Delivery",
-    "summary": "Use run_id filtering to trace job, attempt, and record-level delivery outcomes.",
+    "title_key": "journey.delivery.title",
+    "summary_key": "journey.delivery.summary",
     "steps": [
-      "Filter by run_id when verifying a specific campaign test.",
-      "Compare rows attempted, delivered, and skipped for integrity checks.",
-      "If missing records or failures appear, cross-check Recent Runs and readiness state."
+      "journey.delivery.step_1",
+      "journey.delivery.step_2",
+      "journey.delivery.step_3"
     ]
   },
   "/operator/explain-audit": {
-    "title": "Journey: Explain and Audit",
-    "summary": "Use this page for policy explain lookups and governance/lifecycle audit review.",
+    "title_key": "journey.explain.title",
+    "summary_key": "journey.explain.summary",
     "steps": [
-      "Lookup policy decision with run_id plus customer_id for explain detail.",
-      "Review lifecycle audit actions for promotion or rollback traceability.",
-      "Review delivery audit attempts to confirm downstream execution evidence."
+      "journey.explain.step_1",
+      "journey.explain.step_2",
+      "journey.explain.step_3"
     ]
   },
   "/operator/readiness": {
-    "title": "Journey: Check Readiness",
-    "summary": "Use runtime_runnable and readiness_mode to separate blockers from planning-only entries.",
+    "title_key": "journey.readiness.title",
+    "summary_key": "journey.readiness.summary",
     "steps": [
-      "Confirm required integration profile and delivery target are runtime_runnable=true.",
-      "Treat not_implemented entries as non-runnable and out of current UAT scope.",
-      "Resolve readiness blockers before triggering runs or promoting new defaults."
+      "journey.readiness.step_1",
+      "journey.readiness.step_2",
+      "journey.readiness.step_3"
     ]
   },
   "_default": {
-    "title": "Journey Guidance",
-    "summary": "Use role entry points to choose the right page for your current UAT task.",
+    "title_key": "journey.default.title",
+    "summary_key": "journey.default.summary",
     "steps": [
-      "Select the surface aligned to your role and objective.",
-      "Capture blockers with exact run_id or version_id context.",
-      "Use Explain/Audit and Control-Plane detail pages for evidence-backed decisions."
+      "journey.default.step_1",
+      "journey.default.step_2",
+      "journey.default.step_3"
     ]
   }
 } %}
@@ -178,16 +178,16 @@
   {% for role_map in ROLE_SURFACE_MAP %}
   {% if (visible_roles is none) or (role_map.role_key in visible_roles) %}
   <article class="role-surface-card">
-    <h3>{{ role_map.role }}</h3>
-    <p class="quiet">{{ role_map.focus }}</p>
+    <h3>{{ t(role_map.role_label_key) }}</h3>
+    <p class="quiet">{{ t(role_map.focus_key) }}</p>
     <ul class="compact-list">
       {% for surface in role_map.surfaces %}
       <li>
-        <a href="{{ surface.path }}">{{ surface.label }}</a>
+        <a href="{{ surface.path }}">{{ t(surface.label_key) }}</a>
         {% if surface.path == active_nav %}
-        <span class="chip implemented">You are here</span>
+        <span class="chip implemented">{{ t("role_guidance.you_are_here") }}</span>
         {% endif %}
-        <span class="quiet">{{ surface.action }}</span>
+        <span class="quiet">{{ t(surface.action_key) }}</span>
       </li>
       {% endfor %}
     </ul>
@@ -200,19 +200,19 @@
 {% macro render_page_journey_guidance(active_nav, visible_roles=None) -%}
 {% set journey = PAGE_GUIDANCE.get(active_nav, PAGE_GUIDANCE["_default"]) %}
 <section class="panel journey-panel" data-testid="journey-guidance">
-  <h2>{{ journey.title }}</h2>
-  <p class="quiet">{{ journey.summary }}</p>
+  <h2>{{ t(journey.title_key) }}</h2>
+  <p class="quiet">{{ t(journey.summary_key) }}</p>
   <ul class="compact-list">
     {% for step in journey.steps %}
-    <li>{{ step }}</li>
+    <li>{{ t(step) }}</li>
     {% endfor %}
   </ul>
   {% if visible_roles %}
-  <h3>Role-Relevant Focus</h3>
+  <h3>{{ t("role_guidance.role_relevant_focus") }}</h3>
   <ul class="compact-list">
     {% for role_map in ROLE_SURFACE_MAP %}
     {% if role_map.role_key in visible_roles %}
-    <li><strong>{{ role_map.role }}:</strong> {{ role_map.focus }}</li>
+    <li><strong>{{ t(role_map.role_label_key) }}:</strong> {{ t(role_map.focus_key) }}</li>
     {% endif %}
     {% endfor %}
   </ul>

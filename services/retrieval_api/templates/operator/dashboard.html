@@ -1,129 +1,140 @@
 {% extends "operator/base.html" %}
-{% import "operator/partials/uat_status.html" as uat_status %}
+{% import "operator/partials/uat_status.html" as uat_status with context %}
 {% block content %}
 <section class="panel">
-  <h2>Quick Start</h2>
+  <h2>{{ t("dashboard.quick_start.title") }}</h2>
   <ol class="quick-start">
-    <li>Review readiness below to confirm at least one runnable profile and delivery target.</li>
-    <li>Open <a href="/operator/defaults">Defaults</a> to choose governed runtime defaults.</li>
-    <li>Open <a href="/operator/control-plane/versions">Control-Plane Versions</a> to inspect lifecycle states and active versions across metadata entities.</li>
-    <li>Open <a href="/operator/trigger-run">Trigger Run</a> to launch a campaign run and monitor it in <a href="/operator/recent-runs">Recent Runs</a>.</li>
+    <li>{{ t("dashboard.quick_start.step_1") }}</li>
+    <li>{{ t("dashboard.quick_start.step_2") }}</li>
+    <li>{{ t("dashboard.quick_start.step_3") }}</li>
+    <li>{{ t("dashboard.quick_start.step_4") }}</li>
   </ol>
 </section>
 
 {{ uat_status.render_uat_status_panel() }}
 
 <section class="panel">
-  <h2>System Readiness Snapshot</h2>
+  <h2>{{ t("dashboard.readiness_snapshot.title") }}</h2>
   <div class="grid">
     <article class="stat-card">
-      <h3>Sources</h3>
+      <h3>{{ t("dashboard.readiness_snapshot.sources") }}</h3>
       {% set sources = integrations_payload.get("sources", []) %}
-      <p>{{ sources|length }} total</p>
-      <p>{{ sources | selectattr("runtime_runnable") | list | length }} runnable</p>
+      <p>{{ sources|length }} {{ t("common.total") }}</p>
+      <p>{{ sources | selectattr("runtime_runnable") | list | length }} {{ t("common.runnable") }}</p>
     </article>
     <article class="stat-card">
-      <h3>Exports</h3>
+      <h3>{{ t("dashboard.readiness_snapshot.exports") }}</h3>
       {% set exports = integrations_payload.get("exports", []) %}
-      <p>{{ exports|length }} total</p>
-      <p>{{ exports | selectattr("runtime_runnable") | list | length }} runnable</p>
+      <p>{{ exports|length }} {{ t("common.total") }}</p>
+      <p>{{ exports | selectattr("runtime_runnable") | list | length }} {{ t("common.runnable") }}</p>
     </article>
     <article class="stat-card">
-      <h3>Profiles</h3>
+      <h3>{{ t("dashboard.readiness_snapshot.profiles") }}</h3>
       {% set profiles = integrations_payload.get("profiles", []) %}
-      <p>{{ profiles|length }} total</p>
-      <p>{{ profiles | selectattr("runtime_runnable") | list | length }} runnable</p>
+      <p>{{ profiles|length }} {{ t("common.total") }}</p>
+      <p>{{ profiles | selectattr("runtime_runnable") | list | length }} {{ t("common.runnable") }}</p>
     </article>
     <article class="stat-card">
-      <h3>Delivery Targets</h3>
-      <p>{{ delivery_targets|length }} total</p>
-      <p>{{ delivery_targets | selectattr("runtime_runnable") | list | length }} runnable</p>
+      <h3>{{ t("dashboard.readiness_snapshot.delivery_targets") }}</h3>
+      <p>{{ delivery_targets|length }} {{ t("common.total") }}</p>
+      <p>{{ delivery_targets | selectattr("runtime_runnable") | list | length }} {{ t("common.runnable") }}</p>
     </article>
   </div>
 </section>
 
 <section class="panel">
-  <h2>Selected Defaults</h2>
-  <p class="quiet">Defaults are used by both API-triggered and UI-triggered runs unless overridden.</p>
+  <h2>{{ t("dashboard.selected_defaults.title") }}</h2>
+  <p class="quiet">{{ t("dashboard.selected_defaults.subtitle") }}</p>
   {% if defaults %}
   <dl class="kv">
-    <dt>Default policy version</dt>
+    <dt>{{ t("common.default_policy_version") }}</dt>
     <dd>{{ defaults.default_policy_version }}</dd>
-    <dt>Default integration profile</dt>
+    <dt>{{ t("common.default_integration_profile") }}</dt>
     <dd>
       {{ defaults.default_integration_profile_id }}
       {% if default_profile %}
       <span class="chip {% if default_profile.get('implementation_status') == 'implemented' %}implemented{% else %}planned{% endif %}">
-        {{ default_profile.get("implementation_status", "unknown") }}
+        {% if default_profile.get("implementation_status") == "implemented" %}
+        {{ t("status.implemented") }}
+        {% elif default_profile.get("implementation_status") == "planned" %}
+        {{ t("status.planned") }}
+        {% else %}
+        {{ default_profile.get("implementation_status", t("common.unknown")) }}
+        {% endif %}
       </span>
       {% endif %}
     </dd>
-    <dt>Default delivery target</dt>
+    <dt>{{ t("common.default_delivery_target") }}</dt>
     <dd>
       {{ defaults.default_delivery_target_id }}
       {% if default_delivery_target %}
       <span class="chip {% if default_delivery_target.get('implementation_status') == 'implemented' %}implemented{% else %}planned{% endif %}">
-        {{ default_delivery_target.get("implementation_status", "unknown") }}
+        {% if default_delivery_target.get("implementation_status") == "implemented" %}
+        {{ t("status.implemented") }}
+        {% elif default_delivery_target.get("implementation_status") == "planned" %}
+        {{ t("status.planned") }}
+        {% else %}
+        {{ default_delivery_target.get("implementation_status", t("common.unknown")) }}
+        {% endif %}
       </span>
       {% endif %}
     </dd>
   </dl>
   {% else %}
-  <p class="empty">No defaults are saved yet. Open <a href="/operator/defaults">Defaults</a> to set them before triggering runs.</p>
+  <p class="empty">{{ t("dashboard.selected_defaults.empty") }}</p>
   {% endif %}
 </section>
 
 <section class="panel">
-  <h2>Planned Integrations (Disabled)</h2>
+  <h2>{{ t("dashboard.planned_integrations.title") }}</h2>
   {% set planned_profiles = integrations_payload.get("profiles", []) | rejectattr("implementation_status", "equalto", "implemented") | list %}
   {% set planned_targets = delivery_targets | rejectattr("implementation_status", "equalto", "implemented") | list %}
   {% if planned_profiles or planned_targets %}
-  <p class="quiet">These entries stay visible for planning context and are disabled in form selectors.</p>
+  <p class="quiet">{{ t("dashboard.planned_integrations.subtitle") }}</p>
   <div class="grid">
     <article class="stat-card">
-      <h3>Planned Profiles</h3>
+      <h3>{{ t("dashboard.planned_integrations.profiles") }}</h3>
       {% if planned_profiles %}
       <ul class="compact-list">
         {% for row in planned_profiles %}
-        <li>{{ row.get("profile_id", "unknown_profile") }}</li>
+        <li>{{ row.get("profile_id", t("common.unknown_profile")) }}</li>
         {% endfor %}
       </ul>
       {% else %}
-      <p class="empty">No planned profiles.</p>
+      <p class="empty">{{ t("dashboard.planned_integrations.no_profiles") }}</p>
       {% endif %}
     </article>
     <article class="stat-card">
-      <h3>Planned Delivery Targets</h3>
+      <h3>{{ t("dashboard.planned_integrations.delivery_targets") }}</h3>
       {% if planned_targets %}
       <ul class="compact-list">
         {% for row in planned_targets %}
-        <li>{{ row.get("delivery_target_id", "unknown_target") }}</li>
+        <li>{{ row.get("delivery_target_id", t("common.unknown_target")) }}</li>
         {% endfor %}
       </ul>
       {% else %}
-      <p class="empty">No planned delivery targets.</p>
+      <p class="empty">{{ t("dashboard.planned_integrations.no_delivery_targets") }}</p>
       {% endif %}
     </article>
   </div>
   {% else %}
-  <p class="empty">No planned integrations are currently listed.</p>
+  <p class="empty">{{ t("dashboard.planned_integrations.empty") }}</p>
   {% endif %}
 </section>
 
 <section class="panel">
-  <h2>Operator DAG</h2>
+  <h2>{{ t("dashboard.operator_dag.title") }}</h2>
   {% set primary = model.get("primary_operator_pipeline_entrypoint", {}) %}
   <dl class="kv">
-    <dt>Main DAG id</dt>
-    <dd>{{ primary.get("airflow_dag_id", "unknown") }}</dd>
-    <dt>Usage hint</dt>
+    <dt>{{ t("dashboard.operator_dag.main_dag_id") }}</dt>
+    <dd>{{ primary.get("airflow_dag_id", t("common.unknown")) }}</dd>
+    <dt>{{ t("dashboard.operator_dag.usage_hint_label") }}</dt>
     <dd>
-      UI-triggered runs use the same governed runtime as API/DAG orchestration.
-      For scheduled orchestration, use the DAG above and pass the same trigger parameters.
+      {{ t("dashboard.operator_dag.usage_hint") }}
     </dd>
   </dl>
   {% if not primary %}
-  <p class="empty">Operational model metadata is currently unavailable.</p>
+  <p class="empty">{{ t("dashboard.operator_dag.metadata_unavailable") }}</p>
   {% endif %}
 </section>
 {% endblock %}

@@ -1,25 +1,25 @@
 {% extends "operator/base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>Recent Runs</h2>
+  <h2>{{ t("runs.title") }}</h2>
   <form method="get" action="/operator/recent-runs" class="inline-form">
-    <label for="limit">Limit</label>
+    <label for="limit">{{ t("common.limit") }}</label>
     <input id="limit" name="limit" type="number" min="1" max="200" value="{{ limit }}">
-    <button type="submit" class="button secondary">Refresh</button>
+    <button type="submit" class="button secondary">{{ t("common.refresh") }}</button>
   </form>
   {% if runs %}
   <table>
     <thead>
       <tr>
-        <th>event_ts</th>
-        <th>status</th>
-        <th>run_id</th>
-        <th>campaign_id</th>
-        <th>policy</th>
-        <th>integration</th>
-        <th>delivery</th>
-        <th>summary</th>
-        <th>last_failure</th>
+        <th>{{ t("runs.headers.event_ts") }}</th>
+        <th>{{ t("runs.headers.status") }}</th>
+        <th>{{ t("runs.headers.run_id") }}</th>
+        <th>{{ t("runs.headers.campaign_id") }}</th>
+        <th>{{ t("runs.headers.policy") }}</th>
+        <th>{{ t("runs.headers.integration") }}</th>
+        <th>{{ t("runs.headers.delivery") }}</th>
+        <th>{{ t("runs.headers.summary") }}</th>
+        <th>{{ t("runs.headers.last_failure") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -33,8 +33,8 @@
         <td>{{ row.get("integration_profile_id", "") }}</td>
         <td>{{ row.get("delivery_target_id", "") }}</td>
         <td>
-          export={{ row.get("export_status", "") }}<br>
-          delivery={{ row.get("delivery_status", "") }}
+          {{ t("runs.summary.export") }}={{ row.get("export_status", "") }}<br>
+          {{ t("runs.summary.delivery") }}={{ row.get("delivery_status", "") }}
         </td>
         <td><pre>{{ row.get("error") | json_pretty }}</pre></td>
       </tr>
@@ -42,7 +42,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No run events found yet.</p>
+  <p class="empty">{{ t("runs.empty") }}</p>
   {% endif %}
 </section>
 {% endblock %}

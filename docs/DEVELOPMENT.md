@@ -122,6 +122,23 @@ make retrieval-api
 
 Open the Operator Console at `http://localhost:8000/` and login with `OPERATOR_UI_USERNAME` / `OPERATOR_UI_PASSWORD` from `infra/.env.local` loaded into the API process.
 
+## Operator UI Localization (Stage 10)
+- Supported UI languages: `en`, `ru`.
+- Language selection is visible in the Operator UI header and login page.
+- Language choice is stored in cookie `ae_operator_lang` and is intended for internal testing sessions.
+- Unknown language values and missing translation keys fall back to English.
+
+Localization implementation is centralized:
+- Resolver/helpers: `services/retrieval_api/operator_i18n.py`
+- Dictionaries:
+  - `services/retrieval_api/locales/operator.en.json`
+  - `services/retrieval_api/locales/operator.ru.json`
+
+When adding or updating UI text:
+1. Add/update key-based entries in both locale files.
+2. Use `t(\"key\")` in templates instead of inline language conditionals.
+3. Keep route handlers thin; do not embed translation mapping logic in handlers.
+
 Example calls with role-separated keys:
 ```bash
 curl -H "X-AE-API-Key: campaign_local_key" -H "Content-Type: application/json" \

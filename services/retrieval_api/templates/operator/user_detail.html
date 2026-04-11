@@ -1,97 +1,97 @@
 {% extends "operator/base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>User Detail</h2>
+  <h2>{{ t("users.detail.title") }}</h2>
   <dl class="kv">
-    <dt>User ID</dt><dd><code>{{ user_row.user_id }}</code></dd>
-    <dt>Username</dt><dd>{{ user_row.username }}</dd>
-    <dt>Display Name</dt><dd>{{ user_row.display_name }}</dd>
-    <dt>Email</dt><dd>{{ user_row.email or "-" }}</dd>
-    <dt>Status</dt>
+    <dt>{{ t("users.detail.user_id") }}</dt><dd><code>{{ user_row.user_id }}</code></dd>
+    <dt>{{ t("users.detail.username") }}</dt><dd>{{ user_row.username }}</dd>
+    <dt>{{ t("users.detail.display_name") }}</dt><dd>{{ user_row.display_name }}</dd>
+    <dt>{{ t("users.detail.email") }}</dt><dd>{{ user_row.email or "-" }}</dd>
+    <dt>{{ t("users.detail.status") }}</dt>
     <dd>
       {% if user_row.is_active %}
-      <span class="status-pill status-active">active</span>
+      <span class="status-pill status-active">{{ t("users.status.active") }}</span>
       {% else %}
-      <span class="status-pill status-inactive">inactive</span>
+      <span class="status-pill status-inactive">{{ t("users.status.inactive") }}</span>
       {% endif %}
     </dd>
-    <dt>Roles</dt>
+    <dt>{{ t("users.detail.roles") }}</dt>
     <dd>
       {% if user_row.roles %}
         {% for role in user_row.roles %}
-          <span class="status-pill">{{ role_labels.get(role, role) }}</span>
+          <span class="status-pill">{{ t("role." ~ role, default=role_labels.get(role, role)) }}</span>
         {% endfor %}
       {% else %}
-      <span class="quiet">none</span>
+      <span class="quiet">{{ t("common.none") }}</span>
       {% endif %}
     </dd>
-    <dt>Created</dt><dd>{{ user_row.created_at }}</dd>
-    <dt>Updated</dt><dd>{{ user_row.updated_at }}</dd>
+    <dt>{{ t("users.detail.created") }}</dt><dd>{{ user_row.created_at }}</dd>
+    <dt>{{ t("users.detail.updated") }}</dt><dd>{{ user_row.updated_at }}</dd>
   </dl>
-  <p><a href="/operator/admin/users">Back to user list</a></p>
+  <p><a href="/operator/admin/users">{{ t("users.detail.back_to_list") }}</a></p>
 </section>
 
 <section class="panel">
-  <h2>Credentials</h2>
-  <p class="quiet">Manage password set/reset and view credential status.</p>
+  <h2>{{ t("users.detail.credentials_title") }}</h2>
+  <p class="quiet">{{ t("users.detail.credentials_subtitle") }}</p>
   <p>
-    <a href="/operator/admin/users/{{ user_row.user_id }}/credentials">Open credential management</a>
+    <a href="/operator/admin/users/{{ user_row.user_id }}/credentials">{{ t("users.detail.open_credentials") }}</a>
   </p>
 </section>
 
 <section class="panel">
-  <h2>Update Profile</h2>
+  <h2>{{ t("users.detail.update_profile_title") }}</h2>
   <form method="post" action="/operator/admin/users/{{ user_row.user_id }}/profile" class="form-grid">
-    <label for="display_name">Display Name</label>
+    <label for="display_name">{{ t("users.create.display_name") }}</label>
     <input id="display_name" name="display_name" value="{{ user_row.display_name }}">
 
-    <label for="email">Email</label>
+    <label for="email">{{ t("users.create.email") }}</label>
     <input id="email" name="email" value="{{ user_row.email or '' }}">
 
     <span></span>
-    <button type="submit" class="button">Save Profile</button>
+    <button type="submit" class="button">{{ t("users.detail.save_profile") }}</button>
   </form>
 </section>
 
 <section class="panel">
-  <h2>Activation</h2>
+  <h2>{{ t("users.detail.activation_title") }}</h2>
   <div class="action-row">
     <form method="post" action="/operator/admin/users/{{ user_row.user_id }}/activate">
-      <button type="submit" class="button">Activate</button>
+      <button type="submit" class="button">{{ t("users.detail.activate") }}</button>
     </form>
     <form method="post" action="/operator/admin/users/{{ user_row.user_id }}/deactivate">
-      <button type="submit" class="button secondary">Deactivate</button>
+      <button type="submit" class="button secondary">{{ t("users.detail.deactivate") }}</button>
     </form>
   </div>
 </section>
 
 <section class="panel">
-  <h2>Role Assignments</h2>
+  <h2>{{ t("users.detail.role_assignments_title") }}</h2>
   <form method="post" action="/operator/admin/users/{{ user_row.user_id }}/roles/assign" class="inline-form">
-    <label for="role">Assign Role</label>
+    <label for="role">{{ t("users.detail.assign_role") }}</label>
     <select id="role" name="role">
       {% for role in role_values %}
-      <option value="{{ role }}">{{ role_labels.get(role, role) }}</option>
+      <option value="{{ role }}">{{ t("role." ~ role, default=role_labels.get(role, role)) }}</option>
       {% endfor %}
     </select>
-    <button type="submit" class="button">Assign</button>
+    <button type="submit" class="button">{{ t("users.detail.assign") }}</button>
   </form>
   {% if user_row.roles %}
   <table>
     <thead>
       <tr>
-        <th>Role</th>
-        <th>Action</th>
+        <th>{{ t("users.detail.role") }}</th>
+        <th>{{ t("common.action") }}</th>
       </tr>
     </thead>
     <tbody>
       {% for role in user_row.roles %}
       <tr>
-        <td>{{ role_labels.get(role, role) }}</td>
+        <td>{{ t("role." ~ role, default=role_labels.get(role, role)) }}</td>
         <td>
           <form method="post" action="/operator/admin/users/{{ user_row.user_id }}/roles/remove" class="inline-form">
             <input type="hidden" name="role" value="{{ role }}">
-            <button type="submit" class="button secondary">Remove</button>
+            <button type="submit" class="button secondary">{{ t("users.detail.remove") }}</button>
           </form>
         </td>
       </tr>
@@ -99,20 +99,20 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No roles assigned.</p>
+  <p class="empty">{{ t("users.detail.no_roles_assigned") }}</p>
   {% endif %}
 </section>
 
 <section class="panel">
-  <h2>User Admin Audit Trail</h2>
+  <h2>{{ t("users.detail.audit_title") }}</h2>
   {% if audit_rows %}
   <table>
     <thead>
       <tr>
-        <th>Timestamp</th>
-        <th>Action</th>
-        <th>Actor</th>
-        <th>Details</th>
+        <th>{{ t("common.timestamp") }}</th>
+        <th>{{ t("common.action") }}</th>
+        <th>{{ t("common.actor") }}</th>
+        <th>{{ t("common.details") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -127,7 +127,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No audit actions recorded for this user yet.</p>
+  <p class="empty">{{ t("users.detail.audit_empty") }}</p>
   {% endif %}
 </section>
 {% endblock %}

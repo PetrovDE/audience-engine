@@ -1,32 +1,32 @@
 {% extends "operator/base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>Policy Explain Lookup</h2>
+  <h2>{{ t("explain.title") }}</h2>
   <form method="post" action="/operator/explain-audit" class="inline-form">
-    <label for="run_id">run_id</label>
+    <label for="run_id">{{ t("explain.run_id") }}</label>
     <input id="run_id" name="run_id" type="text" value="{{ lookup_run_id }}" placeholder="UUID">
-    <label for="customer_id">customer_id</label>
+    <label for="customer_id">{{ t("explain.customer_id") }}</label>
     <input id="customer_id" name="customer_id" type="text" value="{{ lookup_customer_id }}" placeholder="cust_00001">
-    <button type="submit" class="button">Lookup</button>
+    <button type="submit" class="button">{{ t("explain.lookup_button") }}</button>
   </form>
   {% if decision %}
   <pre>{{ decision | json_pretty }}</pre>
   {% else %}
-  <p class="empty">Submit run_id + customer_id to load policy decision explain data.</p>
+  <p class="empty">{{ t("explain.empty") }}</p>
   {% endif %}
 </section>
 
 <section class="panel">
-  <h2>Lifecycle Audit Summary</h2>
+  <h2>{{ t("explain.lifecycle_title") }}</h2>
   {% if lifecycle_actions %}
   <table>
     <thead>
       <tr>
-        <th>action_ts</th>
-        <th>action</th>
-        <th>alias</th>
-        <th>outcome</th>
-        <th>actor</th>
+        <th>{{ t("explain.lifecycle_headers.action_ts") }}</th>
+        <th>{{ t("explain.lifecycle_headers.action") }}</th>
+        <th>{{ t("explain.lifecycle_headers.alias") }}</th>
+        <th>{{ t("explain.lifecycle_headers.outcome") }}</th>
+        <th>{{ t("explain.lifecycle_headers.actor") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -42,21 +42,21 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No lifecycle audit actions found.</p>
+  <p class="empty">{{ t("explain.lifecycle_empty") }}</p>
   {% endif %}
 </section>
 
 <section class="panel">
-  <h2>Delivery Audit Summary</h2>
+  <h2>{{ t("explain.delivery_title") }}</h2>
   {% if delivery_attempts %}
   <table>
     <thead>
       <tr>
-        <th>attempt_ts</th>
-        <th>run_id</th>
-        <th>delivery_job_id</th>
-        <th>status</th>
-        <th>details</th>
+        <th>{{ t("explain.delivery_headers.attempt_ts") }}</th>
+        <th>{{ t("explain.delivery_headers.run_id") }}</th>
+        <th>{{ t("explain.delivery_headers.delivery_job_id") }}</th>
+        <th>{{ t("explain.delivery_headers.status") }}</th>
+        <th>{{ t("explain.delivery_headers.details") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -72,7 +72,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No delivery audit attempts found.</p>
+  <p class="empty">{{ t("explain.delivery_empty") }}</p>
   {% endif %}
 </section>
 {% endblock %}

@@ -1,36 +1,36 @@
 {% extends "operator/base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>Control-Plane Version Registry</h2>
-  <p class="quiet">Internal management surface for versioned metadata entities. Lifecycle transitions use centralized registry validation.</p>
+  <h2>{{ t("control_plane.list.title") }}</h2>
+  <p class="quiet">{{ t("control_plane.list.subtitle") }}</p>
   <form class="form-grid" method="get" action="/operator/control-plane/versions">
-    <label for="entity_type">Entity family</label>
+    <label for="entity_type">{{ t("control_plane.list.entity_family") }}</label>
     <select id="entity_type" name="entity_type">
       {% for option in entity_options %}
-      <option value="{{ option.entity_type }}" {% if selected_entity_type == option.entity_type %}selected{% endif %}>{{ option.label }}</option>
+      <option value="{{ option.entity_type }}" {% if selected_entity_type == option.entity_type %}selected{% endif %}>{{ t("entity_family." ~ option.entity_type, default=option.label) }}</option>
       {% endfor %}
     </select>
-    <label for="entity_key">Entity key (optional)</label>
+    <label for="entity_key">{{ t("control_plane.list.entity_key_optional") }}</label>
     <input id="entity_key" name="entity_key" type="text" value="{{ selected_entity_key }}" placeholder="fs_credit">
-    <label for="limit">Rows</label>
+    <label for="limit">{{ t("control_plane.list.rows") }}</label>
     <input id="limit" name="limit" type="number" min="1" max="500" value="{{ limit }}">
     <div></div>
-    <button class="button" type="submit">Load Versions</button>
+    <button class="button" type="submit">{{ t("control_plane.list.load_versions") }}</button>
   </form>
 </section>
 
 <section class="panel">
-  <h2>{{ selected_family_label }}</h2>
+  <h2>{{ t("entity_family." ~ selected_entity_type, default=selected_family_label) }}</h2>
   {% if rows %}
   <table>
     <thead>
       <tr>
-        <th>Entity Key</th>
-        <th>Version</th>
-        <th>Lifecycle State</th>
-        <th>Current Active</th>
-        <th>Important Metadata</th>
-        <th>Detail</th>
+        <th>{{ t("control_plane.list.headers.entity_key") }}</th>
+        <th>{{ t("control_plane.list.headers.version") }}</th>
+        <th>{{ t("control_plane.list.headers.lifecycle_state") }}</th>
+        <th>{{ t("control_plane.list.headers.current_active") }}</th>
+        <th>{{ t("control_plane.list.headers.important_metadata") }}</th>
+        <th>{{ t("control_plane.list.headers.detail") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -41,42 +41,42 @@
         <td><span class="state-chip state-{{ row.lifecycle_state }}">{{ row.lifecycle_state }}</span></td>
         <td>
           {% if row.is_current_active %}
-          <span class="chip implemented">Yes</span>
+          <span class="chip implemented">{{ t("common.yes") }}</span>
           {% else %}
-          <span class="quiet">No</span>
+          <span class="quiet">{{ t("common.no") }}</span>
           {% endif %}
         </td>
         <td>
           {% if row.important_metadata %}
           <pre>{{ row.important_metadata | json_pretty }}</pre>
           {% else %}
-          <span class="quiet">None</span>
+          <span class="quiet">{{ t("common.none") }}</span>
           {% endif %}
         </td>
         <td>
-          <a href="/operator/control-plane/versions/{{ selected_entity_type }}/{{ row.entity_key }}/{{ row.version_id }}">View</a>
+          <a href="/operator/control-plane/versions/{{ selected_entity_type }}/{{ row.entity_key }}/{{ row.version_id }}">{{ t("common.view") }}</a>
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No versions found for the selected filter.</p>
+  <p class="empty">{{ t("control_plane.list.empty") }}</p>
   {% endif %}
 </section>
 
 <section class="panel">
-  <h2>Recent Lifecycle Actions</h2>
+  <h2>{{ t("control_plane.list.recent_actions_title") }}</h2>
   {% if recent_actions %}
   <table>
     <thead>
       <tr>
-        <th>Timestamp</th>
-        <th>Entity</th>
-        <th>Action</th>
-        <th>Target State</th>
-        <th>Outcome</th>
-        <th>Actor</th>
+        <th>{{ t("common.timestamp") }}</th>
+        <th>{{ t("control_plane.list.recent_headers.entity") }}</th>
+        <th>{{ t("common.action") }}</th>
+        <th>{{ t("common.target_state") }}</th>
+        <th>{{ t("common.outcome") }}</th>
+        <th>{{ t("common.actor") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -93,7 +93,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No lifecycle actions recorded yet.</p>
+  <p class="empty">{{ t("control_plane.list.recent_empty") }}</p>
   {% endif %}
 </section>
 {% endblock %}

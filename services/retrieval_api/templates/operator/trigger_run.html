@@ -1,18 +1,18 @@
 {% extends "operator/base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>Trigger Run</h2>
-  <p>Campaign id is required. Leave overrides empty to use saved defaults.</p>
+  <h2>{{ t("trigger.title") }}</h2>
+  <p>{{ t("trigger.subtitle") }}</p>
   <form method="post" action="/operator/trigger-run" class="form-grid">
-    <label for="campaign_id">campaign_id</label>
+    <label for="campaign_id">{{ t("trigger.campaign_id") }}</label>
     <input id="campaign_id" name="campaign_id" type="text" required placeholder="camp_ops_001">
 
-    <label for="requested_size">requested_size</label>
+    <label for="requested_size">{{ t("trigger.requested_size") }}</label>
     <input id="requested_size" name="requested_size" type="number" min="1" max="500" value="20" required>
 
-    <label for="policy_version_override">policy_version override</label>
+    <label for="policy_version_override">{{ t("trigger.policy_override") }}</label>
     <select id="policy_version_override" name="policy_version_override">
-      <option value="">Use default{% if defaults %} ({{ defaults.default_policy_version }}){% endif %}</option>
+      <option value="">{{ t("trigger.use_default") }}{% if defaults %} ({{ defaults.default_policy_version }}){% endif %}</option>
       {% for row in policies %}
       <option value="{{ row.get('policy_version') }}">
         {{ row.get("policy_version") }} {% if row.get("status") %}({{ row.get("status") }}){% endif %}
@@ -20,38 +20,38 @@
       {% endfor %}
     </select>
 
-    <label for="integration_profile_id_override">integration_profile_id override</label>
+    <label for="integration_profile_id_override">{{ t("trigger.integration_override") }}</label>
     <select id="integration_profile_id_override" name="integration_profile_id_override">
-      <option value="">Use default{% if defaults %} ({{ defaults.default_integration_profile_id }}){% endif %}</option>
+      <option value="">{{ t("trigger.use_default") }}{% if defaults %} ({{ defaults.default_integration_profile_id }}){% endif %}</option>
       {% for row in profiles %}
       {% set selectable = row.get("implementation_status") == "implemented" %}
       <option value="{{ row.get('profile_id') }}" {% if not selectable %}disabled{% endif %}>
-        {{ row.get("profile_id") }} [{{ row.get("implementation_status", "unknown") }}]
+        {{ row.get("profile_id") }} [{{ row.get("implementation_status", t("common.unknown")) }}]
       </option>
       {% endfor %}
     </select>
 
-    <label for="delivery_target_id_override">delivery_target_id override</label>
+    <label for="delivery_target_id_override">{{ t("trigger.delivery_override") }}</label>
     <select id="delivery_target_id_override" name="delivery_target_id_override">
-      <option value="">Use default{% if defaults %} ({{ defaults.default_delivery_target_id }}){% endif %}</option>
+      <option value="">{{ t("trigger.use_default") }}{% if defaults %} ({{ defaults.default_delivery_target_id }}){% endif %}</option>
       {% for row in delivery_targets %}
       {% set selectable = row.get("implementation_status") == "implemented" %}
       <option value="{{ row.get('delivery_target_id') }}" {% if not selectable %}disabled{% endif %}>
-        {{ row.get("delivery_target_id") }} [{{ row.get("implementation_status", "unknown") }}]
+        {{ row.get("delivery_target_id") }} [{{ row.get("implementation_status", t("common.unknown")) }}]
       </option>
       {% endfor %}
     </select>
 
-    <button type="submit" class="button">Trigger Run</button>
+    <button type="submit" class="button">{{ t("trigger.button") }}</button>
   </form>
 </section>
 
 <section class="panel">
-  <h2>Last Trigger Result</h2>
+  <h2>{{ t("trigger.last_result_title") }}</h2>
   {% if trigger_result %}
   <pre>{{ trigger_result | json_pretty }}</pre>
   {% else %}
-  <p class="empty">No run has been triggered from this UI session yet.</p>
+  <p class="empty">{{ t("trigger.empty") }}</p>
   {% endif %}
 </section>
 {% endblock %}

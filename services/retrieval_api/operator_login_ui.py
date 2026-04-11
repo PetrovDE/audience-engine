@@ -9,6 +9,13 @@ from fastapi.routing import APIRoute
 
 from pipelines.minimal_slice import user_login
 from services.retrieval_api.auth import Principal, Role
+from services.retrieval_api.operator_i18n import (
+    apply_template_context,
+    current_path_with_query,
+    localize_access_message,
+    set_language_cookie,
+    translate_for_request,
+)
 from services.retrieval_api.operator_session_auth import (
     issue_session_cookie_value,
     resolve_session_subject,
@@ -124,7 +131,10 @@ def _require_signed_in_admin(request: Request) -> Principal | RedirectResponse:
     if not decision.allowed:
         return _redirect_to_forbidden(
             request,
-            message=str(decision.message or "Access denied for this page."),
+            message=localize_access_message(
+                request=request,
+                message=str(decision.message or "Access denied for this page."),
+            ),
         )
     return principal
 
@@ -135,12 +145,14 @@ def _login_context(
     next_path: str,
     error_message: str | None = None,
 ) -> dict[str, object]:
-    return {
+    context: dict[str, object] = {
         "request": request,
         "next_path": operator_ui._safe_next_path(next_path),
+        "language_next_path": current_path_with_query(request),
         "auth_configured": session_signing_is_configured(),
         "error_message": error_message,
     }
+    return apply_template_context(request=request, context=context)
 
 
 def _issue_session_response(
@@ -194,7 +206,8 @@ def _role_aware_base_context(
         roles=role_tuple
     )
     context["visible_guidance_roles"] = visible_guidance_roles(roles=role_tuple)
-    return context
+    context["language_next_path"] = current_path_with_query(request)
+    return apply_template_context(request=request, context=context)
 
 
 _drop_legacy_login_routes()
@@ -231,9 +244,9 @@ def operator_login_submit(
             _login_context(
                 request=request,
                 next_path=safe_next,
-                error_message=(
-                    "Session signing is not configured. "
-                    "Set AE_OPERATOR_SESSION_SECRET."
+                error_message=translate_for_request(
+                    request,
+                    "login.error.session_signing_not_configured",
                 ),
             ),
             status_code=403,
@@ -276,10 +289,26 @@ def operator_login_submit(
         _login_context(
             request=request,
             next_path=safe_next,
-            error_message="Invalid username or password.",
+            error_message=translate_for_request(
+                request,
+                "login.error.invalid_credentials",
+            ),
         ),
         status_code=401,
     )
+
+
+@operator_ui.OPERATOR_UI_ROUTER.post("/operator/language")
+def operator_language_switch(
+    language: str = Form(...),
+    next: str = Form(default=operator_ui.OPERATOR_DASHBOARD_PATH),
+) -> RedirectResponse:
+    response = RedirectResponse(
+        url=operator_ui._safe_next_path(next),
+        status_code=303,
+    )
+    set_language_cookie(response, language)
+    return response
 
 
 @operator_ui.OPERATOR_UI_ROUTER.post("/operator/logout")
@@ -292,7 +321,7 @@ def operator_logout() -> RedirectResponse:
 @operator_ui.OPERATOR_UI_ROUTER.get("/operator/forbidden", response_class=HTMLResponse)
 def operator_forbidden_page(
     request: Request,
-    message: str = Query(default="Access denied for this operator page."),
+    message: str = Query(default=""),
     path: str = Query(default="/operator/dashboard"),
 ) -> Response:
     principal = _signed_in_principal(request)
@@ -301,9 +330,12 @@ def operator_forbidden_page(
     context = operator_ui._base_context(
         request=request,
         principal=principal,
-        page_title="Access Denied",
+        page_title=translate_for_request(request, "forbidden.title"),
         active_nav=operator_ui._safe_next_path(path),
-        error_message=message,
+        error_message=(
+            message
+            or translate_for_request(request, "forbidden.default_message")
+        ),
     )
     context["denied_path"] = path
     return operator_ui.templates.TemplateResponse(

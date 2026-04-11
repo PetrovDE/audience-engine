@@ -1,12 +1,11 @@
 {% extends "operator/base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>Access Denied</h2>
-  <p class="quiet">Your login is valid, but this surface is not available for your role.</p>
+  <h2>{{ t("forbidden.title") }}</h2>
+  <p class="quiet">{{ t("forbidden.subtitle") }}</p>
   {% if denied_path %}
-  <p class="quiet">Requested path: <code>{{ denied_path }}</code></p>
+  <p class="quiet">{{ t("forbidden.requested_path") }} <code>{{ denied_path }}</code></p>
   {% endif %}
-  <p><a href="/operator/dashboard">Go to Dashboard</a></p>
+  <p><a href="/operator/dashboard">{{ t("forbidden.back_to_dashboard") }}</a></p>
 </section>
 {% endblock %}
-

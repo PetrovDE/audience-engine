@@ -1,17 +1,17 @@
 {% extends "operator/base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>User Administration</h2>
-  <p class="quiet">Create and manage internal test users plus role assignments.</p>
+  <h2>{{ t("users.title") }}</h2>
+  <p class="quiet">{{ t("users.subtitle") }}</p>
   {% if users %}
   <table>
     <thead>
       <tr>
-        <th>Username</th>
-        <th>Display Name</th>
-        <th>Status</th>
-        <th>Roles</th>
-        <th>Created</th>
+        <th>{{ t("users.headers.username") }}</th>
+        <th>{{ t("users.headers.display_name") }}</th>
+        <th>{{ t("users.headers.status") }}</th>
+        <th>{{ t("users.headers.roles") }}</th>
+        <th>{{ t("users.headers.created") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -21,18 +21,18 @@
         <td>{{ row.display_name }}</td>
         <td>
           {% if row.is_active %}
-          <span class="status-pill status-active">active</span>
+          <span class="status-pill status-active">{{ t("users.status.active") }}</span>
           {% else %}
-          <span class="status-pill status-inactive">inactive</span>
+          <span class="status-pill status-inactive">{{ t("users.status.inactive") }}</span>
           {% endif %}
         </td>
         <td>
           {% if row.roles %}
             {% for role in row.roles %}
-              <span class="status-pill">{{ role_labels.get(role, role) }}</span>
+              <span class="status-pill">{{ t("role." ~ role, default=role_labels.get(role, role)) }}</span>
             {% endfor %}
           {% else %}
-          <span class="quiet">none</span>
+          <span class="quiet">{{ t("common.none") }}</span>
           {% endif %}
         </td>
         <td>{{ row.created_at }}</td>
@@ -41,41 +41,40 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No users found.</p>
+  <p class="empty">{{ t("users.empty") }}</p>
   {% endif %}
 </section>
 
 <section class="panel">
-  <h2>Create User</h2>
+  <h2>{{ t("users.create.title") }}</h2>
   <form method="post" action="/operator/admin/users" class="form-grid">
-    <label for="username">Username</label>
+    <label for="username">{{ t("users.create.username") }}</label>
     <input id="username" name="username" required placeholder="jane.doe">
 
-    <label for="display_name">Display Name</label>
+    <label for="display_name">{{ t("users.create.display_name") }}</label>
     <input id="display_name" name="display_name" placeholder="Jane Doe">
 
-    <label for="email">Email</label>
+    <label for="email">{{ t("users.create.email") }}</label>
     <input id="email" name="email" type="email" placeholder="jane.doe@example.com">
 
-    <label>Status</label>
+    <label>{{ t("users.create.status") }}</label>
     <select name="is_active">
-      <option value="1">active</option>
-      <option value="0">inactive</option>
+      <option value="1">{{ t("users.status.active") }}</option>
+      <option value="0">{{ t("users.status.inactive") }}</option>
     </select>
 
-    <label>Initial Roles</label>
+    <label>{{ t("users.create.initial_roles") }}</label>
     <div>
       {% for role in role_values %}
       <label class="inline-checkbox">
         <input type="checkbox" name="roles" value="{{ role }}">
-        {{ role_labels.get(role, role) }}
+        {{ t("role." ~ role, default=role_labels.get(role, role)) }}
       </label>
       {% endfor %}
     </div>
 
     <span></span>
-    <button type="submit" class="button">Create User</button>
+    <button type="submit" class="button">{{ t("users.create.button") }}</button>
   </form>
 </section>
 {% endblock %}
-

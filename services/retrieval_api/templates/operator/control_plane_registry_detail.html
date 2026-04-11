@@ -1,52 +1,53 @@
 {% extends "operator/base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>{{ entity_label }} Detail</h2>
-  <p><a href="/operator/control-plane/versions?entity_type={{ entity_type }}&entity_key={{ entity_key }}">Back to list</a></p>
+  {% set localized_entity_label = t("entity_family." ~ entity_type, default=entity_label) %}
+  <h2>{{ localized_entity_label }} {{ t("control_plane.detail.detail_suffix") }}</h2>
+  <p><a href="/operator/control-plane/versions?entity_type={{ entity_type }}&entity_key={{ entity_key }}">{{ t("control_plane.detail.back_to_list") }}</a></p>
   <dl class="kv">
-    <dt>Entity family</dt>
-    <dd>{{ entity_label }} ({{ entity_type }})</dd>
-    <dt>Entity key</dt>
+    <dt>{{ t("control_plane.detail.entity_family") }}</dt>
+    <dd>{{ localized_entity_label }} ({{ entity_type }})</dd>
+    <dt>{{ t("control_plane.detail.entity_key") }}</dt>
     <dd>{{ entity_key }}</dd>
-    <dt>Version id</dt>
+    <dt>{{ t("control_plane.detail.version_id") }}</dt>
     <dd>{{ version_row.version_id }}</dd>
-    <dt>Version</dt>
+    <dt>{{ t("control_plane.detail.version") }}</dt>
     <dd>{{ version_row.version }}</dd>
-    <dt>Lifecycle state</dt>
+    <dt>{{ t("control_plane.detail.lifecycle_state") }}</dt>
     <dd><span class="state-chip state-{{ version_row.lifecycle_state }}">{{ version_row.lifecycle_state }}</span></dd>
-    <dt>Current active</dt>
+    <dt>{{ t("control_plane.detail.current_active") }}</dt>
     <dd>
       {% if version_row.is_current_active %}
-      <span class="chip implemented">Yes</span>
+      <span class="chip implemented">{{ t("common.yes") }}</span>
       {% else %}
-      <span class="quiet">No</span>
+      <span class="quiet">{{ t("common.no") }}</span>
       {% endif %}
     </dd>
-    <dt>Current active version id</dt>
-    <dd>{{ active_version_id or "none" }}</dd>
+    <dt>{{ t("control_plane.detail.current_active_version_id") }}</dt>
+    <dd>{{ active_version_id or t("common.none") }}</dd>
   </dl>
 </section>
 
 <section class="panel">
-  <h2>Promotion Governance Readiness</h2>
+  <h2>{{ t("control_plane.detail.governance_title") }}</h2>
   {% if promotion_readiness.governance_applicability == "not_applicable_already_active" %}
-  <p class="quiet">Activation governance is not applicable because this version is already current active.</p>
+  <p class="quiet">{{ t("control_plane.detail.governance_not_applicable") }}</p>
   {% endif %}
   <dl class="kv">
-    <dt>Target state</dt>
+    <dt>{{ t("common.target_state") }}</dt>
     <dd>{{ promotion_readiness.target_state }}</dd>
-    <dt>Promotion ready</dt>
+    <dt>{{ t("control_plane.detail.promotion_ready") }}</dt>
     <dd>
       {% if promotion_readiness.promotion_ready %}
-      <span class="chip implemented">Yes</span>
+      <span class="chip implemented">{{ t("common.yes") }}</span>
       {% else %}
-      <span class="chip planned">No</span>
+      <span class="chip planned">{{ t("common.no") }}</span>
       {% endif %}
     </dd>
-    <dt>Evidence records</dt>
+    <dt>{{ t("control_plane.detail.evidence_records") }}</dt>
     <dd>{{ promotion_readiness.evidence_count }}</dd>
   </dl>
-  <h3>Blockers</h3>
+  <h3>{{ t("control_plane.detail.blockers") }}</h3>
   {% if promotion_readiness.blockers %}
   <ul>
     {% for blocker in promotion_readiness.blockers %}
@@ -56,13 +57,13 @@
   {% else %}
   <p class="quiet">
     {% if promotion_readiness.governance_applicability == "not_applicable_already_active" %}
-    No blockers (activation not applicable).
+    {{ t("control_plane.detail.no_blockers_not_applicable") }}
     {% else %}
-    No blockers.
+    {{ t("control_plane.detail.no_blockers") }}
     {% endif %}
   </p>
   {% endif %}
-  <h3>Non-Blocking Gaps</h3>
+  <h3>{{ t("control_plane.detail.non_blocking") }}</h3>
   {% if promotion_readiness.non_blocking %}
   <ul>
     {% for gap in promotion_readiness.non_blocking %}
@@ -70,23 +71,23 @@
     {% endfor %}
   </ul>
   {% else %}
-  <p class="quiet">No non-blocking gaps.</p>
+  <p class="quiet">{{ t("control_plane.detail.no_non_blocking") }}</p>
   {% endif %}
-  <h3>Checks</h3>
+  <h3>{{ t("control_plane.detail.checks") }}</h3>
   <table>
     <thead>
       <tr>
-        <th>Check</th>
-        <th>Required</th>
-        <th>Status</th>
-        <th>Message</th>
+        <th>{{ t("control_plane.detail.check_headers.check") }}</th>
+        <th>{{ t("control_plane.detail.check_headers.required") }}</th>
+        <th>{{ t("control_plane.detail.check_headers.status") }}</th>
+        <th>{{ t("control_plane.detail.check_headers.message") }}</th>
       </tr>
     </thead>
     <tbody>
       {% for check in promotion_readiness.checks %}
       <tr>
         <td>{{ check.get("check", check.get("evidence_type", "unknown")) }}</td>
-        <td>{{ "yes" if check.get("required") else "no" }}</td>
+        <td>{{ t("common.yes") if check.get("required") else t("common.no") }}</td>
         <td>{{ check.get("status", "unknown") }}</td>
         <td>{{ check.get("message", "") }}</td>
       </tr>
@@ -96,34 +97,34 @@
 </section>
 
 <section class="panel">
-  <h2>Important Metadata</h2>
+  <h2>{{ t("control_plane.detail.important_metadata") }}</h2>
   {% if version_row.important_metadata %}
   <pre>{{ version_row.important_metadata | json_pretty }}</pre>
   {% else %}
-  <p class="empty">No important metadata fields are currently set for this version.</p>
+  <p class="empty">{{ t("control_plane.detail.no_metadata") }}</p>
   {% endif %}
-  <h3>Payload</h3>
+  <h3>{{ t("control_plane.detail.payload") }}</h3>
   <pre>{{ version_row.payload | json_pretty }}</pre>
 </section>
 
 <section class="panel">
-  <h2>Lifecycle Actions</h2>
-  <p class="quiet">Actions are explicit and mapped to centralized lifecycle transitions. Activation also runs centralized governance checks.</p>
+  <h2>{{ t("control_plane.detail.lifecycle_actions") }}</h2>
+  <p class="quiet">{{ t("control_plane.detail.lifecycle_actions_subtitle") }}</p>
   {% if not can_lifecycle_actions %}
-  <p class="quiet">Your role has read access to this page but cannot execute lifecycle transitions.</p>
+  <p class="quiet">{{ t("control_plane.detail.lifecycle_read_only") }}</p>
   {% endif %}
   <div class="action-row">
     {% for action in action_controls %}
     {% set activate_not_applicable = action.action_name == 'activate' and promotion_readiness.governance_applicability == 'not_applicable_already_active' %}
     {% set governance_blocked = action.action_name == 'activate' and promotion_readiness.governance_applicability != 'not_applicable_already_active' and not promotion_readiness.promotion_ready %}
     <form method="post" action="/operator/control-plane/versions/{{ entity_type }}/{{ entity_key }}/{{ version_id }}/actions/{{ action.action_name }}">
-      <button class="button {% if action.action_name in ('deprecate', 'retire') %}secondary{% endif %}" type="submit" {% if (not action.enabled) or governance_blocked %}disabled{% endif %}>{{ action.label }}</button>
-      <span class="quiet">target={{ action.target_state }}</span>
+      <button class="button {% if action.action_name in ('deprecate', 'retire') %}secondary{% endif %}" type="submit" {% if (not action.enabled) or governance_blocked %}disabled{% endif %}>{{ t("control_plane.action." ~ action.action_name, default=action.label) }}</button>
+      <span class="quiet">{{ t("common.target") }}={{ action.target_state }}</span>
       {% if activate_not_applicable %}
-      <span class="quiet">not applicable (already current active)</span>
+      <span class="quiet">{{ t("control_plane.detail.activate_not_applicable") }}</span>
       {% endif %}
       {% if governance_blocked %}
-      <span class="quiet">blocked by governance</span>
+      <span class="quiet">{{ t("control_plane.detail.activate_blocked") }}</span>
       {% endif %}
     </form>
     {% endfor %}
@@ -131,45 +132,45 @@
 </section>
 
 <section class="panel">
-  <h2>Record Promotion Evidence</h2>
+  <h2>{{ t("control_plane.detail.record_evidence") }}</h2>
   {% if not can_record_evidence %}
-  <p class="quiet">Your role can view governance details but cannot record promotion evidence.</p>
+  <p class="quiet">{{ t("control_plane.detail.record_evidence_read_only") }}</p>
   {% else %}
   <form class="form-grid" method="post" action="/operator/control-plane/versions/{{ entity_type }}/{{ entity_key }}/{{ version_id }}/evidence">
-    <label for="evidence_type">Evidence type</label>
+    <label for="evidence_type">{{ t("control_plane.detail.evidence_type") }}</label>
     <select id="evidence_type" name="evidence_type">
       {% for value in promotion_evidence_types %}
       <option value="{{ value }}">{{ value }}</option>
       {% endfor %}
     </select>
-    <label for="status">Status</label>
+    <label for="status">{{ t("common.status") }}</label>
     <select id="status" name="status">
-      <option value="pass">pass</option>
-      <option value="fail">fail</option>
-      <option value="info" selected>info</option>
+      <option value="pass">{{ t("common.pass") }}</option>
+      <option value="fail">{{ t("common.fail") }}</option>
+      <option value="info" selected>{{ t("common.info") }}</option>
     </select>
-    <label for="note">Note / rationale</label>
-    <textarea id="note" name="note" rows="3" placeholder="Operator rationale or link to evidence artifact"></textarea>
-    <label for="details_json">Details JSON (optional)</label>
+    <label for="note">{{ t("common.note") }}</label>
+    <textarea id="note" name="note" rows="3" placeholder="{{ t('control_plane.detail.note_placeholder') }}"></textarea>
+    <label for="details_json">{{ t("control_plane.detail.details_json") }}</label>
     <textarea id="details_json" name="details_json" rows="3" placeholder='{"artifact_ref":"runbook://...","source":"manual-check"}'></textarea>
     <div></div>
-    <button class="button" type="submit">Record Evidence</button>
+    <button class="button" type="submit">{{ t("control_plane.detail.record_evidence_button") }}</button>
   </form>
   {% endif %}
 </section>
 
 <section class="panel">
-  <h2>Promotion Evidence</h2>
+  <h2>{{ t("control_plane.detail.promotion_evidence") }}</h2>
   {% if promotion_evidence_rows %}
   <table>
     <thead>
       <tr>
-        <th>Timestamp</th>
-        <th>Type</th>
-        <th>Status</th>
-        <th>Actor</th>
-        <th>Note</th>
-        <th>Details</th>
+        <th>{{ t("common.timestamp") }}</th>
+        <th>{{ t("common.type") }}</th>
+        <th>{{ t("common.status") }}</th>
+        <th>{{ t("common.actor") }}</th>
+        <th>{{ t("common.note") }}</th>
+        <th>{{ t("common.details") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -186,22 +187,22 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No promotion evidence has been recorded for this version yet.</p>
+  <p class="empty">{{ t("control_plane.detail.promotion_evidence_empty") }}</p>
   {% endif %}
 </section>
 
 <section class="panel">
-  <h2>Promotion Decisions</h2>
+  <h2>{{ t("control_plane.detail.promotion_decisions") }}</h2>
   {% if promotion_decision_rows %}
   <table>
     <thead>
       <tr>
-        <th>Timestamp</th>
-        <th>Action</th>
-        <th>Target State</th>
-        <th>Outcome</th>
-        <th>Actor</th>
-        <th>Note</th>
+        <th>{{ t("common.timestamp") }}</th>
+        <th>{{ t("common.action") }}</th>
+        <th>{{ t("common.target_state") }}</th>
+        <th>{{ t("common.outcome") }}</th>
+        <th>{{ t("common.actor") }}</th>
+        <th>{{ t("common.note") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -218,22 +219,22 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No promotion decisions recorded for this version yet.</p>
+  <p class="empty">{{ t("control_plane.detail.promotion_decisions_empty") }}</p>
   {% endif %}
 </section>
 
 <section class="panel">
-  <h2>Recent Actions For {{ entity_key }}</h2>
+  <h2>{{ t("control_plane.detail.recent_actions_for", entity_key=entity_key) }}</h2>
   {% if recent_actions %}
   <table>
     <thead>
       <tr>
-        <th>Timestamp</th>
-        <th>Action</th>
-        <th>Target State</th>
-        <th>Outcome</th>
-        <th>Actor</th>
-        <th>Details</th>
+        <th>{{ t("common.timestamp") }}</th>
+        <th>{{ t("common.action") }}</th>
+        <th>{{ t("common.target_state") }}</th>
+        <th>{{ t("common.outcome") }}</th>
+        <th>{{ t("common.actor") }}</th>
+        <th>{{ t("common.details") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -250,7 +251,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No actions recorded for this entity key yet.</p>
+  <p class="empty">{{ t("control_plane.detail.recent_actions_empty") }}</p>
   {% endif %}
 </section>
 {% endblock %}

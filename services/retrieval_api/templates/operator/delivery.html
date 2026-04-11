@@ -1,31 +1,31 @@
 {% extends "operator/base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>Delivery Jobs and Attempts</h2>
+  <h2>{{ t("delivery.title") }}</h2>
   <form method="get" action="/operator/delivery" class="inline-form">
-    <label for="run_id">Filter by run_id (optional)</label>
+    <label for="run_id">{{ t("delivery.filter_run_id") }}</label>
     <input id="run_id" name="run_id" type="text" value="{{ run_filter or '' }}" placeholder="UUID">
-    <label for="limit_jobs">jobs limit</label>
+    <label for="limit_jobs">{{ t("delivery.jobs_limit") }}</label>
     <input id="limit_jobs" name="limit_jobs" type="number" min="1" max="200" value="{{ limit_jobs }}">
-    <label for="limit_attempts">attempts limit</label>
+    <label for="limit_attempts">{{ t("delivery.attempts_limit") }}</label>
     <input id="limit_attempts" name="limit_attempts" type="number" min="1" max="500" value="{{ limit_attempts }}">
-    <button type="submit" class="button secondary">Refresh</button>
+    <button type="submit" class="button secondary">{{ t("common.refresh") }}</button>
   </form>
 </section>
 
 <section class="panel">
-  <h2>Recent Delivery Jobs</h2>
+  <h2>{{ t("delivery.jobs_title") }}</h2>
   {% if jobs %}
   <table>
     <thead>
       <tr>
-        <th>delivery_job_id</th>
-        <th>run_id</th>
-        <th>target</th>
-        <th>status</th>
-        <th>rows attempted</th>
-        <th>rows written</th>
-        <th>rows skipped</th>
+        <th>{{ t("delivery.headers.delivery_job_id") }}</th>
+        <th>{{ t("delivery.headers.run_id") }}</th>
+        <th>{{ t("delivery.headers.target") }}</th>
+        <th>{{ t("delivery.headers.status") }}</th>
+        <th>{{ t("delivery.headers.rows_attempted") }}</th>
+        <th>{{ t("delivery.headers.rows_written") }}</th>
+        <th>{{ t("delivery.headers.rows_skipped") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -43,21 +43,21 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No delivery jobs found.</p>
+  <p class="empty">{{ t("delivery.jobs_empty") }}</p>
   {% endif %}
 </section>
 
 <section class="panel">
-  <h2>Recent Delivery Attempts</h2>
+  <h2>{{ t("delivery.attempts_title") }}</h2>
   {% if attempts %}
   <table>
     <thead>
       <tr>
-        <th>attempt_ts</th>
-        <th>run_id</th>
-        <th>delivery_job_id</th>
-        <th>status</th>
-        <th>details</th>
+        <th>{{ t("delivery.attempts_headers.attempt_ts") }}</th>
+        <th>{{ t("delivery.attempts_headers.run_id") }}</th>
+        <th>{{ t("delivery.attempts_headers.delivery_job_id") }}</th>
+        <th>{{ t("delivery.attempts_headers.status") }}</th>
+        <th>{{ t("delivery.attempts_headers.details") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -73,28 +73,28 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No delivery attempts found.</p>
+  <p class="empty">{{ t("delivery.attempts_empty") }}</p>
   {% endif %}
 </section>
 
 <section class="panel">
-  <h2>Run Delivery Detail</h2>
+  <h2>{{ t("delivery.run_detail_title") }}</h2>
   {% if run_filter and summary_for_run %}
-  <h3>Latest summary</h3>
+  <h3>{{ t("delivery.latest_summary") }}</h3>
   <pre>{{ summary_for_run | json_pretty }}</pre>
   {% elif run_filter %}
-  <p class="empty">No delivery summary found for this run_id.</p>
+  <p class="empty">{{ t("delivery.summary_empty") }}</p>
   {% endif %}
 
   {% if run_filter and records_for_run %}
-  <h3>Delivery records (latest)</h3>
+  <h3>{{ t("delivery.records_latest") }}</h3>
   <table>
     <thead>
       <tr>
-        <th>customer_id</th>
-        <th>target</th>
-        <th>status</th>
-        <th>artifact_uri</th>
+        <th>{{ t("delivery.records_headers.customer_id") }}</th>
+        <th>{{ t("delivery.records_headers.target") }}</th>
+        <th>{{ t("delivery.records_headers.status") }}</th>
+        <th>{{ t("delivery.records_headers.artifact_uri") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -109,7 +109,7 @@
     </tbody>
   </table>
   {% elif run_filter %}
-  <p class="empty">No delivery records found for this run_id.</p>
+  <p class="empty">{{ t("delivery.records_empty") }}</p>
   {% endif %}
 </section>
 {% endblock %}

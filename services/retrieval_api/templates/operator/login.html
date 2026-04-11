@@ -1,18 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Operator Console Login | Audience Engine</title>
+  <title>{{ t("login.page_title") }}</title>
   <link rel="stylesheet" href="{{ url_for('operator_static', path='operator.css') }}">
 </head>
 <body class="login-page">
   <main class="login-card">
-    <h1>Audience Engine Operator Console</h1>
-    <p>Sign in with a persisted operator user identity (username + password). Local env bootstrap credentials may still be used as a fallback during setup.</p>
+    <form method="post" action="{{ language_switch_path }}" class="inline-form language-switcher login-language-switcher">
+      <input type="hidden" name="next" value="{{ language_next_path }}">
+      <label for="operator-language-login">{{ t("language.label") }}</label>
+      <select id="operator-language-login" name="language" onchange="this.form.submit()">
+        {% for option in language_options %}
+        <option value="{{ option.code }}" {% if option.code == lang %}selected{% endif %}>{{ option.label }}</option>
+        {% endfor %}
+      </select>
+      <noscript>
+        <button type="submit" class="button secondary">{{ t("language.switch") }}</button>
+      </noscript>
+    </form>
+    <h1>{{ t("app.console_name") }}</h1>
+    <p>{{ t("login.subtitle") }}</p>
     {% if not auth_configured %}
     <div class="alert error">
-      Login is not configured. Set <code>AE_OPERATOR_SESSION_SECRET</code> in your local environment bootstrap.
+      {{ t("login.not_configured") }}
     </div>
     {% endif %}
     {% if error_message %}
@@ -20,13 +32,13 @@
     {% endif %}
     <form method="post" action="/operator/login">
       <input type="hidden" name="next" value="{{ next_path }}">
-      <label for="username">Username</label>
+      <label for="username">{{ t("login.username") }}</label>
       <input id="username" name="username" type="text" autocomplete="username" required>
-      <label for="password">Password</label>
+      <label for="password">{{ t("login.password") }}</label>
       <input id="password" name="password" type="password" autocomplete="current-password" required>
-      <button type="submit" class="button">Sign In</button>
+      <button type="submit" class="button">{{ t("login.sign_in") }}</button>
     </form>
-    <p class="quiet">This session is for the Operator Console UI only. Admin and campaign API routes still require <code>X-AE-API-Key</code> and RBAC keys from env.</p>
+    <p class="quiet">{{ t("login.ui_session_note") }}</p>
   </main>
 </body>
 </html>

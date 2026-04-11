@@ -1,25 +1,39 @@
-{% import "operator/partials/role_guidance.html" as role_guidance %}
+{% import "operator/partials/role_guidance.html" as role_guidance with context %}
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ page_title }} | Audience Engine Operator Console</title>
+  <title>{{ page_title }} | {{ t("app.console_name") }}</title>
   <link rel="stylesheet" href="{{ url_for('operator_static', path='operator.css') }}">
 </head>
 <body>
   <header class="topbar">
     <div>
-      <h1><a class="brand-link" href="/operator/dashboard">Audience Engine Operator Console</a></h1>
-      <p>Default local entrypoint for operators. UI login is username/password; API RBAC remains key-based.</p>
+      <h1><a class="brand-link" href="/operator/dashboard">{{ t("app.console_name") }}</a></h1>
+      <p>{{ t("app.console_subtitle") }}</p>
     </div>
-    <div class="topbar-meta">
+    <div class="topbar-meta" data-testid="topbar-account-controls">
       {% if principal %}
-      <div class="principal-id">Signed in as {{ principal.actor_id }}</div>
-      <form method="post" action="/operator/logout">
-        <button type="submit" class="button secondary">Log Out</button>
-      </form>
+      <div class="session-meta">
+        <div class="principal-id">{{ t("base.signed_in_as", actor_id=principal.actor_id) }}</div>
+        <form method="post" action="/operator/logout">
+          <button type="submit" class="button secondary">{{ t("base.log_out") }}</button>
+        </form>
+      </div>
       {% endif %}
+      <form method="post" action="{{ language_switch_path }}" class="inline-form language-switcher" data-testid="topbar-language-switcher">
+        <input type="hidden" name="next" value="{{ language_next_path }}">
+        <label for="operator-language-switch">{{ t("language.label") }}</label>
+        <select id="operator-language-switch" name="language" onchange="this.form.submit()">
+          {% for option in language_options %}
+          <option value="{{ option.code }}" {% if option.code == lang %}selected{% endif %}>{{ option.label }}</option>
+          {% endfor %}
+        </select>
+        <noscript>
+          <button type="submit" class="button secondary">{{ t("language.switch") }}</button>
+        </noscript>
+      </form>
     </div>
   </header>
 
@@ -37,25 +51,25 @@
         {% endfor %}
         {% if show_control_plane_nav_fallback|default(true) and not nav_state.has_control_plane_versions %}
         <a href="/operator/control-plane/versions" class="nav-link {% if active_nav == '/operator/control-plane/versions' %}active{% endif %}">
-          Control-Plane Versions
+          {{ t("nav.control_plane_versions") }}
         </a>
         {% endif %}
       </nav>
       <section class="legend">
-        <h2>Role Entry Points</h2>
+        <h2>{{ t("base.role_entry_points") }}</h2>
         {{ role_guidance.render_role_surface_guidance(active_nav, visible_guidance_roles|default(none)) }}
       </section>
       <section class="legend">
-        <h2>Status Legend</h2>
-        <p><span class="chip implemented">Implemented</span> Runtime-capable path in this build.</p>
-        <p><span class="chip planned">Planned</span> Visible for roadmap clarity and intentionally disabled in operator forms.</p>
+        <h2>{{ t("base.status_legend") }}</h2>
+        <p><span class="chip implemented">{{ t("status.implemented") }}</span> {{ t("base.status_implemented_desc") }}</p>
+        <p><span class="chip planned">{{ t("status.planned") }}</span> {{ t("base.status_planned_desc") }}</p>
       </section>
       <section class="legend">
-        <h2>UAT Docs</h2>
-        <p>Dashboard UAT status panel: <a href="/operator/dashboard">/operator/dashboard</a></p>
-        <p>Role flows: <code>docs/UAT_ROLE_FLOWS.md</code></p>
-        <p>Scenario checklist: <code>docs/UAT_SCENARIOS.md</code></p>
-        <p>Role boundaries: <code>docs/ROLE_GUIDES.md</code></p>
+        <h2>{{ t("base.uat_docs") }}</h2>
+        <p>{{ t("base.uat_dashboard_panel") }} <a href="/operator/dashboard">/operator/dashboard</a></p>
+        <p>{{ t("base.uat_role_flows") }} <code>docs/UAT_ROLE_FLOWS.md</code></p>
+        <p>{{ t("base.uat_scenario_checklist") }} <code>docs/UAT_SCENARIOS.md</code></p>
+        <p>{{ t("base.uat_role_boundaries") }} <code>docs/ROLE_GUIDES.md</code></p>
       </section>
     </aside>
 

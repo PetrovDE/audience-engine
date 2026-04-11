@@ -41,6 +41,12 @@ This runbook covers Prometheus + Grafana monitoring for:
    uv run --env-file infra/.env.local python -m pipelines.minimal_slice.run_flow
    ```
 
+## Operator UI Language Selection (EN/RU)
+- The Operator Console supports English (`en`) and Russian (`ru`) for operator-facing UI surfaces.
+- Use the language selector in the login page or top header to switch language.
+- Selection is persisted in cookie `ae_operator_lang` (session-scoped internal testing behavior).
+- If language is unknown or a translation key is missing, UI falls back to English text.
+
 ## Control Plane Registry Bootstrap (Dev/Test)
 Use the explicit bootstrap helper when registry tables are empty in local/dev test environments:
 
