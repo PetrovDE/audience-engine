@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -70,6 +71,26 @@ def _postgres_conninfo() -> str:
     )
 
 
+def _wait_for_postgres_ready(timeout_seconds: float = 30.0) -> None:
+    if psycopg is None:
+        return
+    deadline = time.monotonic() + timeout_seconds
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            with psycopg.connect(_postgres_conninfo()) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+            return
+        except Exception as exc:  # pragma: no cover - environment-dependent
+            last_error = exc
+            time.sleep(0.5)
+    pytest.fail(
+        "postgres container did not become ready within timeout after compose up; "
+        f"last_error={last_error}"
+    )
+
+
 def test_policy_explain_reads_real_db_backed_decision():
     if psycopg is None:
         pytest.skip("psycopg is not installed")
@@ -80,6 +101,7 @@ def test_policy_explain_reads_real_db_backed_decision():
     up = _compose("up", "-d", "postgres")
     if up.returncode != 0:
         pytest.skip(f"docker compose up failed: {up.stderr.strip()}")
+    _wait_for_postgres_ready(timeout_seconds=45.0)
     try:
         run_id = str(uuid4())
         bundle = VersionBundle(
