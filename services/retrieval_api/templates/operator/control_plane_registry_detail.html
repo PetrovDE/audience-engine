@@ -28,6 +28,74 @@
 </section>
 
 <section class="panel">
+  <h2>Promotion Governance Readiness</h2>
+  {% if promotion_readiness.governance_applicability == "not_applicable_already_active" %}
+  <p class="quiet">Activation governance is not applicable because this version is already current active.</p>
+  {% endif %}
+  <dl class="kv">
+    <dt>Target state</dt>
+    <dd>{{ promotion_readiness.target_state }}</dd>
+    <dt>Promotion ready</dt>
+    <dd>
+      {% if promotion_readiness.promotion_ready %}
+      <span class="chip implemented">Yes</span>
+      {% else %}
+      <span class="chip planned">No</span>
+      {% endif %}
+    </dd>
+    <dt>Evidence records</dt>
+    <dd>{{ promotion_readiness.evidence_count }}</dd>
+  </dl>
+  <h3>Blockers</h3>
+  {% if promotion_readiness.blockers %}
+  <ul>
+    {% for blocker in promotion_readiness.blockers %}
+    <li><code>{{ blocker.code }}</code>: {{ blocker.message }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="quiet">
+    {% if promotion_readiness.governance_applicability == "not_applicable_already_active" %}
+    No blockers (activation not applicable).
+    {% else %}
+    No blockers.
+    {% endif %}
+  </p>
+  {% endif %}
+  <h3>Non-Blocking Gaps</h3>
+  {% if promotion_readiness.non_blocking %}
+  <ul>
+    {% for gap in promotion_readiness.non_blocking %}
+    <li><code>{{ gap.code }}</code>: {{ gap.message }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="quiet">No non-blocking gaps.</p>
+  {% endif %}
+  <h3>Checks</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Check</th>
+        <th>Required</th>
+        <th>Status</th>
+        <th>Message</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for check in promotion_readiness.checks %}
+      <tr>
+        <td>{{ check.get("check", check.get("evidence_type", "unknown")) }}</td>
+        <td>{{ "yes" if check.get("required") else "no" }}</td>
+        <td>{{ check.get("status", "unknown") }}</td>
+        <td>{{ check.get("message", "") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel">
   <h2>Important Metadata</h2>
   {% if version_row.important_metadata %}
   <pre>{{ version_row.important_metadata | json_pretty }}</pre>
@@ -40,15 +108,111 @@
 
 <section class="panel">
   <h2>Lifecycle Actions</h2>
-  <p class="quiet">Actions are explicit and mapped to centralized lifecycle transitions.</p>
+  <p class="quiet">Actions are explicit and mapped to centralized lifecycle transitions. Activation also runs centralized governance checks.</p>
   <div class="action-row">
     {% for action in action_controls %}
+    {% set activate_not_applicable = action.action_name == 'activate' and promotion_readiness.governance_applicability == 'not_applicable_already_active' %}
+    {% set governance_blocked = action.action_name == 'activate' and promotion_readiness.governance_applicability != 'not_applicable_already_active' and not promotion_readiness.promotion_ready %}
     <form method="post" action="/operator/control-plane/versions/{{ entity_type }}/{{ entity_key }}/{{ version_id }}/actions/{{ action.action_name }}">
-      <button class="button {% if action.action_name in ('deprecate', 'retire') %}secondary{% endif %}" type="submit" {% if not action.enabled %}disabled{% endif %}>{{ action.label }}</button>
+      <button class="button {% if action.action_name in ('deprecate', 'retire') %}secondary{% endif %}" type="submit" {% if (not action.enabled) or governance_blocked %}disabled{% endif %}>{{ action.label }}</button>
       <span class="quiet">target={{ action.target_state }}</span>
+      {% if activate_not_applicable %}
+      <span class="quiet">not applicable (already current active)</span>
+      {% endif %}
+      {% if governance_blocked %}
+      <span class="quiet">blocked by governance</span>
+      {% endif %}
     </form>
     {% endfor %}
   </div>
+</section>
+
+<section class="panel">
+  <h2>Record Promotion Evidence</h2>
+  <form class="form-grid" method="post" action="/operator/control-plane/versions/{{ entity_type }}/{{ entity_key }}/{{ version_id }}/evidence">
+    <label for="evidence_type">Evidence type</label>
+    <select id="evidence_type" name="evidence_type">
+      {% for value in promotion_evidence_types %}
+      <option value="{{ value }}">{{ value }}</option>
+      {% endfor %}
+    </select>
+    <label for="status">Status</label>
+    <select id="status" name="status">
+      <option value="pass">pass</option>
+      <option value="fail">fail</option>
+      <option value="info" selected>info</option>
+    </select>
+    <label for="note">Note / rationale</label>
+    <textarea id="note" name="note" rows="3" placeholder="Operator rationale or link to evidence artifact"></textarea>
+    <label for="details_json">Details JSON (optional)</label>
+    <textarea id="details_json" name="details_json" rows="3" placeholder='{"artifact_ref":"runbook://...","source":"manual-check"}'></textarea>
+    <div></div>
+    <button class="button" type="submit">Record Evidence</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Promotion Evidence</h2>
+  {% if promotion_evidence_rows %}
+  <table>
+    <thead>
+      <tr>
+        <th>Timestamp</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th>Actor</th>
+        <th>Note</th>
+        <th>Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in promotion_evidence_rows %}
+      <tr>
+        <td>{{ row.get("recorded_ts", "unknown") }}</td>
+        <td>{{ row.get("evidence_type", "unknown") }}</td>
+        <td>{{ row.get("status", "unknown") }}</td>
+        <td>{{ row.get("actor_id", "unknown") }}</td>
+        <td>{{ row.get("note", "") }}</td>
+        <td><pre>{{ row.get("details", {}) | json_pretty }}</pre></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No promotion evidence has been recorded for this version yet.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Promotion Decisions</h2>
+  {% if promotion_decision_rows %}
+  <table>
+    <thead>
+      <tr>
+        <th>Timestamp</th>
+        <th>Action</th>
+        <th>Target State</th>
+        <th>Outcome</th>
+        <th>Actor</th>
+        <th>Note</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in promotion_decision_rows %}
+      <tr>
+        <td>{{ row.get("decision_ts", "unknown") }}</td>
+        <td>{{ row.get("action", "unknown") }}</td>
+        <td>{{ row.get("target_state", "unknown") }}</td>
+        <td>{{ row.get("outcome", "unknown") }}</td>
+        <td>{{ row.get("actor_id", "unknown") }}</td>
+        <td>{{ row.get("note", "") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No promotion decisions recorded for this version yet.</p>
+  {% endif %}
 </section>
 
 <section class="panel">

@@ -25,11 +25,20 @@
   <div class="layout">
     <aside class="sidebar">
       <nav>
+        {% set nav_state = namespace(has_control_plane_versions=false) %}
         {% for item in nav_items %}
+        {% if item.path == "/operator/control-plane/versions" %}
+        {% set nav_state.has_control_plane_versions = true %}
+        {% endif %}
         <a href="{{ item.path }}" class="nav-link {% if active_nav == item.path %}active{% endif %}">
           {{ item.label }}
         </a>
         {% endfor %}
+        {% if not nav_state.has_control_plane_versions %}
+        <a href="/operator/control-plane/versions" class="nav-link {% if active_nav == '/operator/control-plane/versions' %}active{% endif %}">
+          Control-Plane Versions
+        </a>
+        {% endif %}
       </nav>
       <section class="legend">
         <h2>Status Legend</h2>

@@ -10,6 +10,9 @@ from pipelines.minimal_slice.control_plane_registry import validate_lifecycle_tr
 from pipelines.minimal_slice.control_plane_registry_action_audit import (
     list_recent_registry_lifecycle_actions,
 )
+from services.retrieval_api.operator_control_plane_governance import (
+    promotion_governance_context,
+)
 from services.retrieval_api.operator_ui import _base_context, templates
 
 CONTROL_PLANE_LIST_PATH = "/operator/control-plane/versions"
@@ -180,6 +183,12 @@ def render_detail_page(
     )
     active_version_id = str(active_row.get("version_id")) if active_row else None
     version_row["is_current_active"] = version_row["version_id"] == active_version_id
+    governance = promotion_governance_context(
+        entity_type=resolved_entity_type,
+        entity_key=entity_key,
+        version_id=version_id,
+        version_row=version_row,
+    )
     context = _with_management_nav(
         _base_context(
             request=request,
@@ -201,6 +210,10 @@ def render_detail_page(
             "action_controls": _action_controls(
                 str(version_row.get("lifecycle_state") or "")
             ),
+            "promotion_readiness": governance["promotion_readiness"],
+            "promotion_evidence_rows": governance["promotion_evidence_rows"],
+            "promotion_decision_rows": governance["promotion_decision_rows"],
+            "promotion_evidence_types": governance["promotion_evidence_types"],
             "recent_actions": list_recent_registry_lifecycle_actions(
                 entity_type=resolved_entity_type,
                 entity_key=entity_key,

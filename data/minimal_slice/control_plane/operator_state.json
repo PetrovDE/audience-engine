@@ -1,0 +1,5 @@
+{
+  "default_policy_version": "policy_credit_v1",
+  "default_integration_profile_id": "clickhouse_postgres_export",
+  "default_delivery_target_id": "crm_csv_file"
+}
