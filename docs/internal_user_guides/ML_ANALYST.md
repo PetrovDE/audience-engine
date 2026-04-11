@@ -40,15 +40,20 @@
 - На проблемы readiness-коннекторов/профилей: к Инженеру данных.
 - На бизнес-приоритеты кампаний: к Пользователю кампании/owner.
 
-## Слоты скриншотов (placeholder)
-| Slot | Route | Что снять | Статус |
+## Слоты скриншотов
+| Slot | Route | Asset | Статус |
 | --- | --- | --- | --- |
-| ML-01 | `/operator/control-plane/versions` | Выбор семейства (например `embedding_model_versions`) | Placeholder |
-| ML-02 | `/operator/control-plane/versions/{entity_type}/{entity_key}/{version_id}` | Governance checks/blockers + evidence form | Placeholder |
-| ML-03 | `/operator/explain-audit` | Форма lookup + таблицы lifecycle/delivery audit | Placeholder |
-| ML-04 | `/operator/readiness` | Readiness контекст перед рекомендацией промоушена | Placeholder |
+| ML-01 | `/operator/control-plane/versions?entity_type=embedding_model_versions` | `images/ml-control-plane-embedding-list.png` | Captured (live) |
+| ML-02 | `/operator/control-plane/versions/{entity_type}/{entity_key}/{version_id}` | `images/ml-control-plane-detail.png` | Captured (live) |
+| ML-03 | `/operator/explain-audit` | `images/ml-explain-audit.png` | Captured (live) |
+| ML-04 | `/operator/readiness` | `images/ml-readiness.png` | Captured (live) |
+
+![ML-01 Control-Plane Embedding List](images/ml-control-plane-embedding-list.png)
+![ML-02 Control-Plane Detail](images/ml-control-plane-detail.png)
+![ML-03 Explain Audit](images/ml-explain-audit.png)
+![ML-04 Readiness](images/ml-readiness.png)
 
 ## Проверено vs не проверено
 Проверено в runtime (2026-04-11): страницы control-plane, explain-audit, readiness доступны и локализованы.
 Проверено по коду: `operator.control_plane.evidence.record` разрешен ml_analyst; `operator.control_plane.lifecycle.transition` запрещен.
-Не проверено на конкретных данных: наличие реальных explain-строк для указанного `run_id/customer_id`.
+Проверено live-capture (2026-04-11): все слоты ML-01..ML-04 сняты с логином `ml_analyst`.

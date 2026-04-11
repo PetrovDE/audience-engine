@@ -43,16 +43,22 @@
 - Модельные/policy-рекомендации: к роли ML-аналитик.
 - Бизнес-контекст кампании и приоритеты прогона: к Пользователю кампании/владельцу кампании.
 
-## Слоты скриншотов (placeholder)
-| Slot | Route | Что снять | Статус |
+## Слоты скриншотов
+| Slot | Route | Asset | Статус |
 | --- | --- | --- | --- |
-| AO-01 | `/operator/dashboard` | Панель готовности + выбранные дефолты | Placeholder |
-| AO-02 | `/operator/control-plane/versions` | Список версий с lifecycle_state | Placeholder |
-| AO-03 | `/operator/control-plane/versions/{entity_type}/{entity_key}/{version_id}` | Блоки governance + lifecycle actions + evidence | Placeholder |
-| AO-04 | `/operator/admin/users` | Список пользователей + форма создания | Placeholder |
-| AO-05 | `/operator/admin/users/{user_id}/credentials` | Страница установки/сброса пароля | Placeholder |
+| AO-01 | `/operator/dashboard` | `images/admin-dashboard.png` | Captured (live) |
+| AO-02 | `/operator/control-plane/versions` | `images/admin-control-plane-versions.png` | Captured (live) |
+| AO-03 | `/operator/control-plane/versions/{entity_type}/{entity_key}/{version_id}` | `images/admin-control-plane-detail.png` | Captured (live) |
+| AO-04 | `/operator/admin/users` | `images/admin-user-admin-list.png` | Captured (live) |
+| AO-05 | `/operator/admin/users/{user_id}/credentials` | `images/admin-user-credentials.png` | Captured (live) |
+
+![AO-01 Admin Dashboard](images/admin-dashboard.png)
+![AO-02 Control-Plane Versions](images/admin-control-plane-versions.png)
+![AO-03 Control-Plane Detail](images/admin-control-plane-detail.png)
+![AO-04 User Admin](images/admin-user-admin-list.png)
+![AO-05 User Credentials](images/admin-user-credentials.png)
 
 ## Проверено vs не проверено
 Проверено в runtime (2026-04-11): доступность маршрутов и RU-лейблы навигации.
 Проверено по коду: admin имеет доступ к `operator.user_admin.manage`, `operator.user_credentials.manage`, lifecycle transitions и evidence.
-Не проверено в runtime на конкретных данных: успешный/блокированный промоушен для реального `version_id`.
+Проверено live-capture (2026-04-11): все слоты AO-01..AO-05 сняты с логином `admin_operator`.

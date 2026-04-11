@@ -40,15 +40,20 @@
 - Governance/модельные доказательства: к ML-аналитику.
 - Бизнес-параметры кампании: к Пользователю кампании.
 
-## Слоты скриншотов (placeholder)
-| Slot | Route | Что снять | Статус |
+## Слоты скриншотов
+| Slot | Route | Asset | Статус |
 | --- | --- | --- | --- |
-| DE-01 | `/operator/readiness` | Таблицы readiness + `runtime_runnable`/`runtime_validation_errors` | Placeholder |
-| DE-02 | `/operator/defaults` | Форма сохранения defaults | Placeholder |
-| DE-03 | `/operator/control-plane/versions` | Фильтр семейства + lifecycle_state | Placeholder |
-| DE-04 | `/operator/trigger-run` | Форма запуска с override/selectors | Placeholder |
+| DE-01 | `/operator/readiness` | `images/data-readiness.png` | Captured (live) |
+| DE-02 | `/operator/defaults` | `images/data-defaults.png` | Captured (live) |
+| DE-03 | `/operator/control-plane/versions` | `images/data-control-plane-versions.png` | Captured (live) |
+| DE-04 | `/operator/trigger-run` | `images/data-trigger-run.png` | Captured (live) |
+
+![DE-01 Readiness](images/data-readiness.png)
+![DE-02 Defaults](images/data-defaults.png)
+![DE-03 Control-Plane Versions](images/data-control-plane-versions.png)
+![DE-04 Trigger Run](images/data-trigger-run.png)
 
 ## Проверено vs не проверено
 Проверено в runtime (2026-04-11): маршруты, RU-лейблы, форма defaults/readiness pages.
 Проверено по коду: `operator.defaults.update` и `operator.trigger_run.submit` доступны data_engineer; lifecycle transition недоступен.
-Не проверено на конкретных данных: фактические значения `runtime_validation_errors` в текущем датасете.
+Проверено live-capture (2026-04-11): все слоты DE-01..DE-04 сняты с логином `data_engineer`.

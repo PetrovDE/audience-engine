@@ -43,15 +43,20 @@
 - Вопросы governance/policy объяснений: к ML-аналитику.
 - Решение по активации/rollback и операционные инциденты: к Админу/Оператору.
 
-## Слоты скриншотов (placeholder)
-| Slot | Route | Что снять | Статус |
+## Слоты скриншотов
+| Slot | Route | Asset | Статус |
 | --- | --- | --- | --- |
-| CU-01 | `/operator/trigger-run` | Форма запуска кампании + поля overrides | Placeholder |
-| CU-02 | `/operator/recent-runs` | Таблица статусов + `last_failure` | Placeholder |
-| CU-03 | `/operator/delivery` | Фильтр по run_id + jobs/attempts/records | Placeholder |
-| CU-04 | `/operator/explain-audit` | Форма explain lookup | Placeholder |
+| CU-01 | `/operator/trigger-run` | `images/campaign-trigger-run.png` | Captured (live) |
+| CU-02 | `/operator/recent-runs` | `images/campaign-recent-runs.png` | Captured (live) |
+| CU-03 | `/operator/delivery` | `images/campaign-delivery.png` | Captured (live) |
+| CU-04 | `/operator/explain-audit` | `images/campaign-explain-audit.png` | Captured (live) |
+
+![CU-01 Trigger Run](images/campaign-trigger-run.png)
+![CU-02 Recent Runs](images/campaign-recent-runs.png)
+![CU-03 Delivery](images/campaign-delivery.png)
+![CU-04 Explain Audit](images/campaign-explain-audit.png)
 
 ## Проверено vs не проверено
 Проверено в runtime (2026-04-11): страницы trigger-run/recent-runs/delivery/explain/readiness доступны в RU UI.
 Проверено по коду: campaign_user может `operator.trigger_run.submit`, но не имеет доступа к defaults/control-plane/users.
-Не проверено на конкретных данных: успешный бизнес-результат конкретной кампании в текущем seed-наборе.
+Проверено live-capture (2026-04-11): все слоты CU-01..CU-04 сняты с логином `campaign_user`.

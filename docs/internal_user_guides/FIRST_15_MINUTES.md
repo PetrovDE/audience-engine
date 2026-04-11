@@ -32,13 +32,17 @@
 - `docs/UAT_SCENARIOS.md`
 - `docs/ROLE_GUIDES.md`
 
-## Слоты скриншотов (placeholder)
-| Slot | Route | Что снять | Статус |
+## Слоты скриншотов
+| Slot | Route | Asset | Статус |
 | --- | --- | --- | --- |
-| QS-01 | `/operator/login` | Форма входа + переключатель языка | Placeholder |
-| QS-02 | `/operator/dashboard` | RU-навигация + `Быстрый старт` | Placeholder |
-| QS-03 | `/operator/forbidden` | Пример страницы запрета доступа | Placeholder |
+| QS-01 | `/operator/login` | `images/qs-login-ru.png` | Captured (live) |
+| QS-02 | `/operator/dashboard` | `images/qs-dashboard-ru.png` | Captured (live) |
+| QS-03 | `/operator/forbidden` | `images/qs-forbidden-campaign.png` | Captured (live) |
+
+![QS-01 Логин (RU)](images/qs-login-ru.png)
+![QS-02 Дашборд (RU)](images/qs-dashboard-ru.png)
+![QS-03 Forbidden для campaign_user](images/qs-forbidden-campaign.png)
 
 ## Проверено vs не проверено
-Проверено в runtime (2026-04-11): `/operator/login`, `/operator/language`, `/operator/dashboard`, RU-названия пунктов меню.
-Не проверено скриншотами в этой среде: фактические PNG/JPG файлы (оставлены слоты).
+Проверено в runtime (2026-04-11): `/operator/login`, `/operator/language`, `/operator/dashboard`, `/operator/forbidden`, RU-названия пунктов меню.
+Проверено live-capture (2026-04-11): все три слота QS-01..QS-03.
