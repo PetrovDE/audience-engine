@@ -1,4 +1,5 @@
 {% extends "operator/base.html" %}
+{% import "operator/partials/uat_status.html" as uat_status %}
 {% block content %}
 <section class="panel">
   <h2>Quick Start</h2>
@@ -9,6 +10,8 @@
     <li>Open <a href="/operator/trigger-run">Trigger Run</a> to launch a campaign run and monitor it in <a href="/operator/recent-runs">Recent Runs</a>.</li>
   </ol>
 </section>
+
+{{ uat_status.render_uat_status_panel() }}
 
 <section class="panel">
   <h2>System Readiness Snapshot</h2>

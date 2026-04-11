@@ -3,6 +3,10 @@
 ## Purpose
 Define control-plane responsibilities, allowed actions, ownership boundaries, and handoffs by role.
 
+## Stage 7 UAT Execution Note
+- Use `/operator/dashboard` as the UAT start page and review the UAT status panel before executing role scenarios.
+- Role guidance in the UI is routing guidance for shared-operator sessions, not persona-isolated authorization.
+
 ## Role Matrix
 | Role | Core responsibility | Owned entities | Primary handoff |
 | --- | --- | --- | --- |
@@ -38,6 +42,7 @@ Define control-plane responsibilities, allowed actions, ownership boundaries, an
 - `emb_version` composition (`fs_version + prompt_version + model_version`).
 - Model/version compatibility with feature sets and policy gates.
 - Quality/performance evidence needed for activation or rollback recommendation.
+- Where to execute in current UI: `/operator/control-plane/versions` (including `embedding_model_versions` family), `/operator/explain-audit`, `/operator/readiness`.
 
 ### Admin/Operator
 - End-to-end run orchestration across API/UI and Airflow operator DAG path.
@@ -45,7 +50,7 @@ Define control-plane responsibilities, allowed actions, ownership boundaries, an
 - Incident operations for fail-closed conditions, promotions, and controlled rollback.
 
 ## Implemented vs Target-State Notes
-Implemented as of 2026-04-10:
+Implemented as of 2026-04-11:
 - Runtime/API enforces role separation primarily between campaign and admin API keys.
 - Operator UI is operational but currently uses one operator login model, not four fully isolated personas.
 

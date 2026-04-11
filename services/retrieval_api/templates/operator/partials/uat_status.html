@@ -1,0 +1,164 @@
+{% set UAT_SCENARIO_STATUS = [
+  {
+    "id": "UAT-1",
+    "name": "Campaign User run and outcome review",
+    "expected_to_pass": true,
+    "known_caveats": (
+      "Requires runnable defaults and implemented integration/delivery entries. "
+      "Delivery run_id filter expects UUID format."
+    ),
+    "surfaces": [
+      {"path": "/operator/trigger-run", "label": "Trigger Run"},
+      {"path": "/operator/recent-runs", "label": "Recent Runs"},
+      {"path": "/operator/delivery", "label": "Delivery"}
+    ]
+  },
+  {
+    "id": "UAT-2",
+    "name": "Data Engineer defaults and readiness validation",
+    "expected_to_pass": true,
+    "known_caveats": (
+      "Only implemented profiles/targets are selectable in Defaults. "
+      "Planned entries stay visible for planning context."
+    ),
+    "surfaces": [
+      {"path": "/operator/readiness", "label": "Readiness"},
+      {"path": "/operator/defaults", "label": "Defaults"},
+      {"path": "/operator/dashboard", "label": "Dashboard"}
+    ]
+  },
+  {
+    "id": "UAT-3",
+    "name": "ML Analyst governance and explain review",
+    "expected_to_pass": true,
+    "known_caveats": (
+      "Explain lookup requires both run_id and customer_id. "
+      "Governance detail depends on available registry version rows."
+    ),
+    "surfaces": [
+      {"path": "/operator/control-plane/versions", "label": "Control-Plane Versions"},
+      {"path": "/operator/explain-audit", "label": "Explain / Audit"}
+    ]
+  },
+  {
+    "id": "UAT-4",
+    "name": "Admin/Operator lifecycle and governance control",
+    "expected_to_pass": true,
+    "known_caveats": (
+      "Activation is intentionally blocked when governance checks fail or evidence "
+      "is missing."
+    ),
+    "surfaces": [
+      {"path": "/operator/control-plane/versions", "label": "Control-Plane Versions"},
+      {"path": "/operator/explain-audit", "label": "Explain / Audit"}
+    ]
+  },
+  {
+    "id": "UAT-5",
+    "name": "Provider/model visibility across readiness and registry",
+    "expected_to_pass": true,
+    "known_caveats": (
+      "Requires at least one model or embedding-model version in the registry for "
+      "detail validation."
+    ),
+    "surfaces": [
+      {"path": "/operator/readiness", "label": "Readiness"},
+      {"path": "/operator/control-plane/versions?entity_type=embedding_model_versions", "label": "Embedding Model Versions"}
+    ]
+  }
+] %}
+
+{% set UAT_READINESS_CHECKS = [
+  {
+    "check": "Role guidance cards + journey guidance rendered",
+    "expected_to_pass": true,
+    "where": "/operator/dashboard"
+  },
+  {
+    "check": "Main navigation exposes key UAT pages",
+    "expected_to_pass": true,
+    "where": "Sidebar navigation on all operator pages"
+  },
+  {
+    "check": "Trigger-run happy path links to run + delivery verification surfaces",
+    "expected_to_pass": true,
+    "where": "/operator/trigger-run, /operator/recent-runs, /operator/delivery"
+  },
+  {
+    "check": "Governance actions show blockers/evidence and enforce activation checks",
+    "expected_to_pass": true,
+    "where": "/operator/control-plane/versions/*"
+  },
+  {
+    "check": "Provider/model visibility available in registry and role guidance",
+    "expected_to_pass": true,
+    "where": "/operator/control-plane/versions and /operator/readiness"
+  }
+] %}
+
+{% macro _render_surface_links(surfaces) -%}
+{% for surface in surfaces %}
+<a href="{{ surface.path }}">{{ surface.label }}</a>{% if not loop.last %}, {% endif %}
+{% endfor %}
+{%- endmacro %}
+
+{% macro render_uat_status_panel() -%}
+<section class="panel" data-testid="uat-status-panel">
+  <h2>UAT Pack Status (Stage 7)</h2>
+  <p class="quiet">
+    This status panel is implementation-honest for internal UAT execution. It does not
+    imply persona-scoped RBAC.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Scenario</th>
+        <th>Expected status</th>
+        <th>Known blockers/caveats</th>
+        <th>Where to execute</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in UAT_SCENARIO_STATUS %}
+      <tr>
+        <td>{{ row.id }}: {{ row.name }}</td>
+        <td>
+          {% if row.expected_to_pass %}
+          <span class="chip implemented">Expected pass</span>
+          {% else %}
+          <span class="chip planned">Blocked</span>
+          {% endif %}
+        </td>
+        <td>{{ row.known_caveats }}</td>
+        <td>{{ _render_surface_links(row.surfaces) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <h3>UAT Checks</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Check</th>
+        <th>Expected status</th>
+        <th>Where to review</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in UAT_READINESS_CHECKS %}
+      <tr>
+        <td>{{ row.check }}</td>
+        <td>
+          {% if row.expected_to_pass %}
+          <span class="chip implemented">Expected pass</span>
+          {% else %}
+          <span class="chip planned">Blocked</span>
+          {% endif %}
+        </td>
+        <td>{{ row.where }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{%- endmacro %}

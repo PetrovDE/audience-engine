@@ -1,4 +1,4 @@
-# UAT Role Flows (Stage 6)
+# UAT Role Flows (Stage 7)
 
 ## Purpose
 Provide a compact, implementation-accurate guide for internal UAT participants using the current Operator Console and control-plane governance surfaces.
@@ -7,6 +7,7 @@ Provide a compact, implementation-accurate guide for internal UAT participants u
 - Current UI uses a shared operator login surface with role-oriented guidance.
 - Full persona-isolated RBAC is not implemented in this stage.
 - Use this guide for flow ownership and page routing during UAT.
+- Start each UAT session at `/operator/dashboard` and review the UAT status panel before running scenarios.
 
 ## Role Responsibilities and Primary Pages
 | Role | Owns in UAT | Primary pages | Typical output |
@@ -31,7 +32,7 @@ Provide a compact, implementation-accurate guide for internal UAT participants u
 | `/operator/readiness` | `runtime_runnable=false` | Required connector/profile/target is not runnable now | `runtime_validation_errors`, `runtime_readiness_mode` |
 | `/operator/control-plane/versions` detail | Promotion readiness blocker list | Missing or failing governance evidence for activation | Blocker `code`/`message`, evidence table |
 | `/operator/trigger-run` | Run failed error payload | Policy/data quality/readiness precondition failed | Error details and selected versions/defaults |
-| `/operator/recent-runs` | `status=failed` or error field populated | Run did not complete successfully | `last_failure`, policy/integration/delivery fields |
+| `/operator/recent-runs` | `status=failed` or error field populated | Run did not complete successfully | `last_failure` column (rendered from error payload), policy/integration/delivery fields |
 | `/operator/delivery` | failed attempts or missing summary/records | Export/delivery stage issue | Attempt details, per-run summary |
 | `/operator/explain-audit` | No decision row or missing audit entries | No matching decision or missing downstream evidence | `run_id` format, `customer_id`, audit tables |
 
@@ -41,5 +42,5 @@ Provide a compact, implementation-accurate guide for internal UAT participants u
 - Separate true blockers from documented non-blocking gaps so UAT decisions stay explicit.
 
 ## Implemented Now vs Target-State Reminder
-- Implemented now: governance readiness checks, evidence recording, promotion decision history, lifecycle action audit.
+- Implemented now: dashboard UAT status panel, governance readiness checks, evidence recording, promotion decision history, lifecycle action audit.
 - Target-state (not implemented in this stage): persona-scoped permissions and workflow-routed approvals per role.
