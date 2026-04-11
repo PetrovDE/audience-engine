@@ -12,6 +12,11 @@ from .control_plane_registry_domain import (
     validate_lifecycle_transition,
     validate_uuid,
 )
+from .provider_identity import (
+    infer_provider_type_from_key,
+    normalize_embedding_capability,
+    normalize_provider_type,
+)
 from .control_plane_registry_lineage_repository import PostgresLineageBindingRepository
 from .control_plane_registry_repository import PostgresRegistryRepository
 
@@ -33,6 +38,41 @@ class ControlPlaneRegistryService:
         self._registry_repo = registry_repo or PostgresRegistryRepository()
         self._lineage_repo = lineage_repo or PostgresLineageBindingRepository()
 
+    def _normalize_embedding_provider_inputs(
+        self,
+        *,
+        entity_key: str,
+        metadata: dict[str, Any],
+        references: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        resolved_metadata = dict(metadata)
+        resolved_references = dict(references)
+        provider_model_ref = normalize_required(
+            str(resolved_references.get("provider_model_ref") or ""),
+            field="provider_model_ref",
+        )
+        resolved_references["provider_model_ref"] = provider_model_ref
+        resolved_references["capability"] = normalize_embedding_capability(
+            str(resolved_references.get("capability") or "embedding"),
+        )
+        provider_type_raw = str(resolved_metadata.get("provider_type") or "").strip()
+        if not provider_type_raw:
+            provider_type_raw = str(infer_provider_type_from_key(entity_key) or "")
+        resolved_metadata["provider_type"] = normalize_provider_type(
+            provider_type_raw,
+            field="metadata.provider_type",
+        )
+        config_ref = str(resolved_metadata.get("provider_config_ref") or "").strip()
+        if config_ref:
+            resolved_metadata["provider_config_ref"] = config_ref
+        else:
+            resolved_metadata.pop("provider_config_ref", None)
+
+        model_version = str(resolved_metadata.get("model_version") or "").strip()
+        if model_version:
+            resolved_metadata["model_version"] = model_version
+        return resolved_metadata, resolved_references
+
     def create_draft_version(
         self,
         *,
@@ -43,12 +83,22 @@ class ControlPlaneRegistryService:
         references: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         spec = entity_spec(entity_type)
+        resolved_metadata = metadata if isinstance(metadata, dict) else {}
+        resolved_references = references if isinstance(references, dict) else {}
+        if entity_type.strip().lower() == "embedding_providers":
+            resolved_metadata, resolved_references = (
+                self._normalize_embedding_provider_inputs(
+                    entity_key=entity_key,
+                    metadata=resolved_metadata,
+                    references=resolved_references,
+                )
+            )
         return self._registry_repo.create_draft_version(
             spec=spec,
             entity_key=normalize_required(entity_key, field="entity_key"),
             version=normalize_required(version, field="version"),
-            metadata=metadata if isinstance(metadata, dict) else {},
-            references=references if isinstance(references, dict) else {},
+            metadata=resolved_metadata,
+            references=resolved_references,
         )
 
     def list_versions(
@@ -180,6 +230,11 @@ class ControlPlaneRegistryService:
                     "embedding_model_version_id": None,
                     "policy_version_id": None,
                     "audience_definition_version_id": None,
+                    "embedding_provider_id": None,
+                    "embedding_provider_key": None,
+                    "provider_type": None,
+                    "provider_model_ref": None,
+                    "capability": None,
                 },
                 reasons=[f"registry_unavailable:{exc}"],
                 explicit_requested=False,

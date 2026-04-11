@@ -10,17 +10,10 @@ from qdrant_client.http.models import (
     Range,
 )
 
-from .config import OLLAMA_BASE_URL, QDRANT_ALIAS, QDRANT_URL
-from .gpu_guard import ensure_gpu_available
+from .config import QDRANT_ALIAS, QDRANT_URL
+from .embedding_provider_clients import embed_query_for_selection
+from .embedding_provider_resolution import resolve_embedding_provider_selection
 from .metrics import observe_retrieval_latency
-
-try:
-    from langchain_ollama import OllamaEmbeddings
-except ImportError as exc:  # pragma: no cover
-    raise RuntimeError(
-        "langchain-ollama is required. Install dependencies from requirements.txt"
-    ) from exc
-
 
 def _normalize_values(values: Optional[Sequence[str] | str]) -> List[str]:
     if values is None:
@@ -171,9 +164,14 @@ def retrieve_similar(
                 raise ValueError(f"customer_id not found in index: {query_customer_id}")
             query_vector = matches[0].vector
         else:
-            ensure_gpu_available("Embedding jobs/services")
-            embedder = OllamaEmbeddings(model=ollama_model, base_url=OLLAMA_BASE_URL)
-            query_vector = embedder.embed_query(query_text or "")
+            selection = resolve_embedding_provider_selection(
+                fallback_model_version=ollama_model,
+            )
+            query_vector = embed_query_for_selection(
+                text=query_text or "",
+                selection=selection,
+                gpu_context="Embedding jobs/services",
+            )
 
         query_response = client.query_points(
             collection_name=QDRANT_ALIAS,

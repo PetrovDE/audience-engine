@@ -36,7 +36,9 @@ def _seed_spec() -> DevRegistrySeedSpec:
         model_version="nomic-embed-text",
         embedding_provider_key="local_ollama",
         embedding_provider_version="emb_provider_nomic-embed-text",
+        embedding_provider_type="ollama",
         provider_model_ref="nomic-embed-text",
+        provider_config_ref=None,
         policy_key="policy_credit",
         policy_version="policy_credit_v1",
         audience_definition_key="audience_default",
@@ -80,6 +82,8 @@ def test_bootstrap_dev_test_registry_seeds_minimum_active_entities_with_referenc
         == "7e8ce4be-a6fd-4fe5-a85a-3c5f903fce79"
     )
     assert provider_call["references"]["provider_model_ref"] == "nomic-embed-text"
+    assert provider_call["metadata"]["provider_type"] == "ollama"
+    assert provider_call["metadata"]["model_version"] == "nomic-embed-text"
 
     audience_call = service.calls[4][1]
     assert (

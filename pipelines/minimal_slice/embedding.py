@@ -9,19 +9,11 @@ from .config import (
     EMBED_SPEC_PATH,
     EMBEDDING_MODEL_VERSION,
     EMBEDDINGS_PATH,
-    OLLAMA_BASE_URL,
 )
-from .gpu_guard import ensure_gpu_available
+from .embedding_provider_clients import embed_documents_for_selection
+from .embedding_provider_resolution import resolve_embedding_provider_selection
 from .metrics import record_embedding_batch
 from .storage import get_cached_embedding, set_cached_embedding
-
-try:
-    from langchain_ollama import OllamaEmbeddings
-except ImportError as exc:  # pragma: no cover
-    raise RuntimeError(
-        "langchain-ollama is required. Install dependencies from requirements.txt"
-    ) from exc
-
 
 def _read_jsonl(path: Path) -> List[Dict]:
     rows: List[Dict] = []
@@ -42,7 +34,9 @@ def build_embeddings(
     output_path: Path = EMBEDDINGS_PATH,
     ollama_model: str = EMBEDDING_MODEL_VERSION,
 ) -> Tuple[Path, int]:
-    ensure_gpu_available("Embedding jobs/services")
+    selection = resolve_embedding_provider_selection(
+        fallback_model_version=ollama_model,
+    )
 
     with EMBED_SPEC_PATH.open("r", encoding="utf-8") as f:
         emb_spec = yaml.safe_load(f)
@@ -52,9 +46,8 @@ def build_embeddings(
     rows = _read_jsonl(feature_mart_path)
     docs = [_render_template(template, row) for row in rows]
     fs_version = str(rows[0]["fs_version"]) if rows else "unknown"
-    emb_version = f"{fs_version}+{prompt_version}+{ollama_model}"
+    emb_version = f"{fs_version}+{prompt_version}+{selection.model_version}"
 
-    embedder = OllamaEmbeddings(model=ollama_model, base_url=OLLAMA_BASE_URL)
     start = time.perf_counter()
     vectors: List[List[float]] = []
     missing_docs: List[str] = []
@@ -69,14 +62,18 @@ def build_embeddings(
         vectors.append(cached)
 
     if missing_docs:
-        generated = embedder.embed_documents(missing_docs)
+        generated = embed_documents_for_selection(
+            texts=missing_docs,
+            selection=selection,
+            gpu_context="Embedding jobs/services",
+        )
         for pos, text, vector in zip(missing_positions, missing_docs, generated):
             vectors[pos] = vector
             set_cached_embedding(emb_version=emb_version, text=text, vector=vector)
 
     duration_seconds = time.perf_counter() - start
     record_embedding_batch(
-        model=ollama_model,
+        model=f"{selection.provider_type}:{selection.provider_model_ref}",
         doc_count=len(docs),
         duration_seconds=duration_seconds,
     )
@@ -101,6 +98,10 @@ def build_embeddings(
                 "region_code": row.get("region_code", "unknown"),
                 "segment_id": row.get("segment_id", "unknown"),
                 "product_line": row.get("product_line", "unknown"),
+                "embedding_provider_type": selection.provider_type,
+                "embedding_provider_key": selection.provider_key,
+                "embedding_provider_model_ref": selection.provider_model_ref,
+                "embedding_model_version": selection.model_version,
             }
             f.write(json.dumps(payload) + "\n")
     return output_path, dim

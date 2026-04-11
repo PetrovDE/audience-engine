@@ -4,9 +4,63 @@ from typing import Any
 
 from .control_plane_registry_db import load_psycopg, postgres_conninfo
 from .control_plane_registry_domain import validate_uuid
+from .provider_identity import infer_provider_type_from_key
 
 
 class PostgresLineageBindingRepository:
+    def _embedding_provider_identity(
+        self,
+        cursor: Any,
+        *,
+        embedding_model_version_id: str | None,
+    ) -> dict[str, str | None]:
+        if not embedding_model_version_id:
+            return {
+                "embedding_provider_id": None,
+                "embedding_provider_key": None,
+                "provider_type": None,
+                "provider_model_ref": None,
+                "capability": None,
+            }
+        cursor.execute(
+            """
+            SELECT
+                emv.embedding_provider_id::text AS embedding_provider_id,
+                ep.provider_key AS embedding_provider_key,
+                emv.provider_model_ref,
+                emv.capability,
+                emv.payload
+            FROM embedding_model_versions emv
+            JOIN embedding_providers ep ON ep.id = emv.embedding_provider_id
+            WHERE emv.id = %s::uuid
+            """,
+            (embedding_model_version_id,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return {
+                "embedding_provider_id": None,
+                "embedding_provider_key": None,
+                "provider_type": None,
+                "provider_model_ref": None,
+                "capability": None,
+            }
+        payload = row.get("payload")
+        payload_obj = payload if isinstance(payload, dict) else {}
+        provider_key = str(row.get("embedding_provider_key") or "").strip() or None
+        provider_type = str(payload_obj.get("provider_type") or "").strip() or None
+        if not provider_type:
+            provider_type = infer_provider_type_from_key(provider_key)
+        return {
+            "embedding_provider_id": str(row.get("embedding_provider_id") or "")
+            or None,
+            "embedding_provider_key": provider_key,
+            "provider_type": provider_type,
+            "provider_model_ref": str(row.get("provider_model_ref") or "").strip()
+            or None,
+            "capability": str(row.get("capability") or "").strip() or None,
+        }
+
     def _resolve_explicit_or_active_version_id(
         self,
         cursor: Any,
@@ -116,6 +170,10 @@ class PostgresLineageBindingRepository:
                         parent_id=resolved_feature_set_version_id,
                     )
                 )
+                provider_identity = self._embedding_provider_identity(
+                    cur,
+                    embedding_model_version_id=resolved_embedding_model_version_id,
+                )
 
         return {
             "feature_set_version_id": resolved_feature_set_version_id,
@@ -123,6 +181,7 @@ class PostgresLineageBindingRepository:
             "embedding_model_version_id": resolved_embedding_model_version_id,
             "policy_version_id": resolved_policy_version_id,
             "audience_definition_version_id": resolved_audience_definition_version_id,
+            **provider_identity,
         }
 
     def persist_run_lineage_binding(self, cursor: Any, **kwargs: Any) -> None:

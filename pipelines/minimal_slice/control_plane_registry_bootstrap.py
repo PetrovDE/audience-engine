@@ -18,7 +18,9 @@ class DevRegistrySeedSpec:
     model_version: str
     embedding_provider_key: str
     embedding_provider_version: str
+    embedding_provider_type: str
     provider_model_ref: str
+    provider_config_ref: str | None
     policy_key: str
     policy_version: str
     audience_definition_key: str
@@ -40,7 +42,9 @@ def build_dev_registry_seed_spec() -> DevRegistrySeedSpec:
     model_key = "embedding_model"
     embedding_provider_key = "local_ollama"
     embedding_provider_version = f"emb_provider_{model_version}"
+    embedding_provider_type = "ollama"
     provider_model_ref = model_version
+    provider_config_ref = None
 
     policy_version = POLICY_VERSION
     policy_key = (
@@ -59,7 +63,9 @@ def build_dev_registry_seed_spec() -> DevRegistrySeedSpec:
         model_version=model_version,
         embedding_provider_key=embedding_provider_key,
         embedding_provider_version=embedding_provider_version,
+        embedding_provider_type=embedding_provider_type,
         provider_model_ref=provider_model_ref,
+        provider_config_ref=provider_config_ref,
         policy_key=policy_key,
         policy_version=policy_version,
         audience_definition_key=audience_definition_key,
@@ -101,7 +107,12 @@ def bootstrap_dev_test_registry(
         entity_type="embedding_providers",
         entity_key=resolved_spec.embedding_provider_key,
         version=resolved_spec.embedding_provider_version,
-        metadata={"seeded_by": "bootstrap_dev_test_registry"},
+        metadata={
+            "seeded_by": "bootstrap_dev_test_registry",
+            "provider_type": resolved_spec.embedding_provider_type,
+            "provider_config_ref": resolved_spec.provider_config_ref,
+            "model_version": resolved_spec.model_version,
+        },
         references={
             "model_version_id": model_version["version_id"],
             "provider_model_ref": resolved_spec.provider_model_ref,

@@ -18,7 +18,28 @@ FEATURE_SET_PATH = GOVERNANCE_DIR / "features" / "feature_sets" / "fs_credit_v1.
 EMBED_SPEC_PATH = GOVERNANCE_DIR / "embeddings" / "embedding_specs" / "emb_llm_v2.yaml"
 REASON_CODES_PATH = GOVERNANCE_DIR / "dictionaries" / "reason_codes.yaml"
 EMBEDDING_MODEL_VERSION = os.getenv("EMBEDDING_MODEL_VERSION", "nomic-embed-text")
+EMBEDDING_PROVIDER_DEFAULT = os.getenv("EMBEDDING_PROVIDER_DEFAULT", "ollama")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+AI_HUB_ENABLED = os.getenv("AI_HUB_ENABLED", "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+}
+AI_HUB_BASE_URL = os.getenv("AI_HUB_BASE_URL", "").strip()
+AI_HUB_EMBEDDING_MODEL = os.getenv("AI_HUB_EMBEDDING_MODEL", "").strip()
+AI_HUB_ACCESS_TOKEN = os.getenv("AI_HUB_ACCESS_TOKEN", "").strip()
+AI_HUB_TOKEN_URL = os.getenv("AI_HUB_TOKEN_URL", "").strip()
+AI_HUB_CLIENT_ID = os.getenv("AI_HUB_CLIENT_ID", "").strip()
+AI_HUB_CLIENT_SECRET = os.getenv("AI_HUB_CLIENT_SECRET", "").strip()
+AI_HUB_USERNAME = os.getenv("AI_HUB_USERNAME", "").strip()
+AI_HUB_PASSWORD = os.getenv("AI_HUB_PASSWORD", "").strip()
+AI_HUB_VERIFY_SSL = os.getenv("AI_HUB_VERIFY_SSL", "1").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+}
+AI_HUB_TIMEOUT_SECONDS = max(0.1, float(os.getenv("AI_HUB_TIMEOUT_SECONDS", "30.0")))
+AI_HUB_RETRY_ATTEMPTS = max(1, int(os.getenv("AI_HUB_RETRY_ATTEMPTS", "2")))
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_ALIAS = "audience-serving"
