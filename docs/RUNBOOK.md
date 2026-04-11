@@ -3,7 +3,226 @@
 This document adds operational guidance for the Postgres audit sink.
 For monitoring dashboards and metrics triage, see the root runbook: `../RUNBOOK.md`.
 Index generation lifecycle SOP moved to `docs/INDEX_LIFECYCLE.md`.
-Host/bootstrap deployment steps moved to `docs/DEPLOYMENT.md`.
+Deployment model and artifacts are documented in `docs/DEPLOYMENT.md`.
+
+## RedOS Host-Service Deployment (Stage 12A)
+
+This section is the canonical path for single-node server deployment where:
+
+- infra runs in Docker Compose
+- AudienceEngine API runs on the host via systemd
+
+### Prerequisites
+
+Required on the RedOS host:
+
+- Docker Engine + Docker Compose v2 (`docker compose`)
+- Python 3.11+
+- `curl`
+- `git` (or another way to place repo files at `/opt/audience-engine`)
+- systemd (default on RedOS)
+
+Quick checks:
+
+```bash
+docker --version
+docker compose version
+python3 --version
+```
+
+### Host Layout and Service User
+
+Use this layout:
+
+- project root: `/opt/audience-engine`
+- service env file: `/etc/audience-engine/audience-engine.env`
+- systemd unit: `/etc/systemd/system/audience-engine.service`
+- runtime writable data: `/opt/audience-engine/data/minimal_slice/*`
+
+Create service user and directories:
+
+```bash
+sudo useradd --system --create-home --home-dir /home/audience-engine --shell /sbin/nologin audience-engine || true
+sudo install -d -m 0750 -o audience-engine -g audience-engine /etc/audience-engine
+sudo install -d -m 0750 -o audience-engine -g audience-engine /opt/audience-engine/data/minimal_slice/run
+sudo install -d -m 0750 -o audience-engine -g audience-engine /opt/audience-engine/data/minimal_slice/delivery
+sudo install -d -m 0750 -o audience-engine -g audience-engine /opt/audience-engine/data/minimal_slice/control_plane
+```
+
+### Project Checkout and uv Setup
+
+Checkout code:
+
+```bash
+sudo mkdir -p /opt/audience-engine
+sudo chown "$USER":"$USER" /opt/audience-engine
+git clone <YOUR_REPO_URL> /opt/audience-engine
+cd /opt/audience-engine
+```
+
+Install `uv` only if missing:
+
+```bash
+if [ ! -x /usr/local/bin/uv ]; then
+  curl -LsSf https://astral.sh/uv/install.sh | sudo env UV_INSTALL_DIR=/usr/local/bin sh
+fi
+```
+
+Validate `uv` for service startup path:
+
+```bash
+/usr/local/bin/uv --version
+sudo -u audience-engine /usr/local/bin/uv --version
+```
+
+Create environment and install runtime dependencies:
+
+```bash
+cd /opt/audience-engine
+sudo -u audience-engine bash -lc 'cd /opt/audience-engine && /usr/local/bin/uv venv .venv --python 3.11'
+sudo -u audience-engine bash -lc "cd /opt/audience-engine && /usr/local/bin/uv sync --group runtime-retrieval-api --group runtime-minimal-slice --locked"
+```
+
+### Configure Env Files
+
+Compose infra env:
+
+```bash
+cd /opt/audience-engine
+cp infra/.env.prod.example infra/.env.prod
+```
+
+Host app env (systemd EnvironmentFile):
+
+```bash
+sudo cp infra/systemd/audience-engine.host.env.example /etc/audience-engine/audience-engine.env
+sudo chown audience-engine:audience-engine /etc/audience-engine/audience-engine.env
+sudo chmod 0640 /etc/audience-engine/audience-engine.env
+```
+
+Edit both files and replace placeholders before start.
+
+Host-run vs container-network rule:
+
+- In `/etc/audience-engine/audience-engine.env`, use host-reachable endpoints (`127.0.0.1`/`localhost` or real host/IP).
+- Do not use compose-internal names (`postgres`, `qdrant`, `redis`, `minio`, `clickhouse`) in that host env file.
+- Compose-internal names are valid only for container-to-container traffic.
+
+### Bring Up Infra Containers
+
+Start infra:
+
+```bash
+cd /opt/audience-engine
+docker compose --env-file infra/.env.prod -f infra/docker-compose.yml up -d
+```
+
+Verify container state:
+
+```bash
+docker compose --env-file infra/.env.prod -f infra/docker-compose.yml ps
+```
+
+Verify key service reachability from host:
+
+```bash
+curl -fsS http://127.0.0.1:6333/healthz
+curl -fsS http://127.0.0.1:8123/ping
+docker compose --env-file infra/.env.prod -f infra/docker-compose.yml exec redis redis-cli ping
+```
+
+### Install and Start systemd Service
+
+Install service unit from repo artifact:
+
+```bash
+cd /opt/audience-engine
+sudo cp infra/systemd/audience-engine.service /etc/systemd/system/audience-engine.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now audience-engine.service
+```
+
+Validate the exact startup command path used by systemd:
+
+```bash
+sudo systemctl cat audience-engine.service
+sudo -u audience-engine bash -lc 'cd /opt/audience-engine && /usr/local/bin/uv run python -c "import uvicorn; print(\"uv_startup_path_ok\")"'
+```
+
+Unit ordering assumptions in this deployment shape:
+
+- service starts after `network-online.target` and `docker.service`
+- service has `Wants=docker.service` but does not start compose services automatically
+- operators must bring infra up (`docker compose ... up -d`) before starting or enabling the app service
+
+Operational commands:
+
+```bash
+sudo systemctl start audience-engine.service
+sudo systemctl stop audience-engine.service
+sudo systemctl restart audience-engine.service
+sudo systemctl status audience-engine.service
+sudo journalctl -u audience-engine.service -n 200 --no-pager
+sudo journalctl -u audience-engine.service -f
+```
+
+### Bootstrap and Schema Notes
+
+For a fresh Postgres volume, schema init SQL is applied automatically by compose.
+
+Optional initial bootstrap tasks:
+
+```bash
+sudo -u audience-engine bash -lc 'cd /opt/audience-engine && /usr/local/bin/uv run --env-file /etc/audience-engine/audience-engine.env python -m pipelines.minimal_slice.control_plane_registry --bootstrap-dev-test'
+sudo -u audience-engine bash -lc 'cd /opt/audience-engine && /usr/local/bin/uv run --env-file /etc/audience-engine/audience-engine.env python -m pipelines.minimal_slice.user_admin --bootstrap-dev-admin'
+```
+
+For an existing Postgres volume, apply SQL migrations from `infra/postgres/migrations` before relying on new control-plane or delivery paths.
+
+### Common Failures and Checks
+
+1. Service restarts repeatedly (`systemctl status` shows failed).
+   - Check `journalctl -u audience-engine.service`.
+   - Confirm `/etc/audience-engine/audience-engine.env` exists and has readable permissions for `audience-engine`.
+   - Confirm `WorkingDirectory=/opt/audience-engine` contains the project checkout.
+
+2. App starts but infra calls fail (connection refused or name resolution errors).
+   - Re-check host env values: use `127.0.0.1`/host IP, not compose DNS names.
+   - Confirm compose stack is healthy with `docker compose ... ps`.
+
+3. Protected endpoints return RBAC errors.
+   - Ensure `AE_CAMPAIGN_API_KEYS` and/or `AE_ADMIN_API_KEYS` are set in `/etc/audience-engine/audience-engine.env`.
+
+4. Operator login fails.
+   - Ensure `AE_OPERATOR_SESSION_SECRET` is set.
+   - Ensure bootstrap admin exists (run `--bootstrap-dev-admin`) or valid UI fallback creds are configured.
+
+5. Runtime errors related to missing tables.
+   - If database volume is not fresh, run pending migrations from `infra/postgres/migrations`.
+
+### Minimal Validation Checklist
+
+1. Service is active:
+   ```bash
+   sudo systemctl is-active audience-engine.service
+   ```
+2. Health endpoint responds:
+   ```bash
+   curl -fsS http://127.0.0.1:8000/healthz
+   ```
+3. Operator UI login page is reachable:
+   - `http://<server-host>:8000/operator/login`
+4. Core infra dependencies respond:
+   - Qdrant: `curl -fsS http://127.0.0.1:6333/healthz`
+   - ClickHouse: `curl -fsS http://127.0.0.1:8123/ping`
+   - Redis: `docker compose --env-file infra/.env.prod -f infra/docker-compose.yml exec redis redis-cli ping`
+5. Trigger-run smoke path succeeds with admin API key:
+   ```bash
+   curl -fsS -X POST "http://127.0.0.1:8000/v1/admin/runs/trigger" \
+     -H "X-AE-API-Key: <admin_api_key>" \
+     -H "Content-Type: application/json" \
+     -d '{"campaign_id":"stage12a_smoke","policy_version":"policy_credit_v1","requested_size":20}'
+   ```
 
 ## Operator Workflow (Primary)
 Use this sequence for operational usage.

@@ -8,6 +8,34 @@ This repository provides two Compose stacks:
 Both stacks keep Ollama external (`OLLAMA_BASE_URL`) and now use the same custom Airflow image build.
 Both stacks now also include API-key RBAC inputs for retrieval/admin role separation.
 
+## Stage 12A) RedOS Host-Run App + Containerized Infra
+
+This stage standardizes deployment as:
+
+- infra services in Docker Compose (`infra/docker-compose.yml`)
+- AudienceEngine app on the host as a systemd service on RedOS
+
+Artifacts added for this shape:
+
+- systemd unit: `infra/systemd/audience-engine.service`
+- host app env template: `infra/systemd/audience-engine.host.env.example`
+
+Host-run networking rule (important):
+
+- Compose DNS names like `postgres`, `qdrant`, `redis`, `minio`, and `clickhouse` are container-network names.
+- The host-run app process must use host-reachable endpoints (`127.0.0.1`/`localhost` with published ports, or real hostnames/IPs).
+- Do not copy container-internal hostnames into `/etc/audience-engine/audience-engine.env`.
+
+Canonical single-node service assumptions for this stage:
+
+- repo checkout path: `/opt/audience-engine`
+- service env path: `/etc/audience-engine/audience-engine.env`
+- service user/group: `audience-engine`
+- `uv` install path for systemd startup: `/usr/local/bin/uv`
+- app process command: `/usr/local/bin/uv run python -m uvicorn services.retrieval_api.app:app --host 0.0.0.0 --port 8000`
+
+Detailed operator steps are in `docs/RUNBOOK.md` (RedOS systemd path section).
+
 ## 1) Why `_PIP_ADDITIONAL_REQUIREMENTS` Was Removed
 
 Airflow runtime pip mutation was removed to keep startup deterministic and production-honest.

@@ -1,0 +1,27 @@
+[Unit]
+Description=AudienceEngine Retrieval API (host-run, uv-managed)
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=simple
+User=audience-engine
+Group=audience-engine
+WorkingDirectory=/opt/audience-engine
+EnvironmentFile=/etc/audience-engine/audience-engine.env
+ExecStartPre=/usr/bin/test -d /opt/audience-engine
+ExecStartPre=/usr/bin/test -f /etc/audience-engine/audience-engine.env
+ExecStartPre=/usr/bin/test -x /usr/local/bin/uv
+ExecStartPre=/usr/local/bin/uv --version
+ExecStart=/usr/local/bin/uv run python -m uvicorn services.retrieval_api.app:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=60
+NoNewPrivileges=true
+UMask=0027
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=audience-engine
+
+[Install]
+WantedBy=multi-user.target
