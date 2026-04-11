@@ -100,13 +100,16 @@ http://localhost:8000/
 
 Login model:
 - Local operator bootstrap requires loading `infra/.env.local` into the API process (for example, via `--env-file infra/.env.local` or `make retrieval-api`).
-- Use `OPERATOR_UI_USERNAME` / `OPERATOR_UI_PASSWORD` from env (local defaults: `admin` / `203217`).
+- Main path: persisted user login (username/password) backed by `ae_users` + `ae_user_credentials`.
+- Session signing requires `AE_OPERATOR_SESSION_SECRET`.
+- Env `OPERATOR_UI_USERNAME` / `OPERATOR_UI_PASSWORD` remains as a local bootstrap fallback.
 - UI uses a signed session cookie and does not store raw admin API keys in browser cookies.
 - Admin/campaign API routes stay RBAC-protected with `X-AE-API-Key` and `AE_*_API_KEYS`.
 - Stage 9 user/role foundation bootstrap command (creates/reconciles one active `admin_operator` user):
   ```bash
   uv run --env-file infra/.env.local python -m pipelines.minimal_slice.user_admin --bootstrap-dev-admin
   ```
+  This also seeds bootstrap admin credentials when `AE_BOOTSTRAP_ADMIN_PASSWORD` (or local fallback `OPERATOR_UI_PASSWORD`) is present.
 
 Implemented UI sections:
 - Dashboard
@@ -117,6 +120,7 @@ Implemented UI sections:
 - Explain / Audit
 - Integrations / Readiness
 - User Admin (`/operator/admin/users`)
+- User Credential Management (`/operator/admin/users/{user_id}/credentials`)
 
 Honesty rules in UI:
 - Planned connectors/targets remain visible but non-selectable for defaults/run triggers.

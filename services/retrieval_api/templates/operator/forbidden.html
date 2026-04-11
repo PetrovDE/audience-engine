@@ -1,0 +1,12 @@
+{% extends "operator/base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>Access Denied</h2>
+  <p class="quiet">Your login is valid, but this surface is not available for your role.</p>
+  {% if denied_path %}
+  <p class="quiet">Requested path: <code>{{ denied_path }}</code></p>
+  {% endif %}
+  <p><a href="/operator/dashboard">Go to Dashboard</a></p>
+</section>
+{% endblock %}
+

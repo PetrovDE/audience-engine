@@ -16,7 +16,6 @@ def _normalize_optional_email(value: str | None) -> str | None:
         return None
     cleaned = value.strip()
     return cleaned if cleaned else None
-    return {}
 
 
 class PostgresUserAdminRepository:

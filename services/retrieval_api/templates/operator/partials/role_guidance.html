@@ -1,5 +1,6 @@
 {% set ROLE_SURFACE_MAP = [
   {
+    "role_key": "campaign_user",
     "role": "Campaign User",
     "focus": "Run approved campaigns and confirm delivery status.",
     "surfaces": [
@@ -21,6 +22,7 @@
     ]
   },
   {
+    "role_key": "data_engineer",
     "role": "Data Engineer",
     "focus": "Validate defaults and integration readiness before execution.",
     "surfaces": [
@@ -42,6 +44,7 @@
     ]
   },
   {
+    "role_key": "ml_analyst",
     "role": "ML Analyst",
     "focus": "Review model and policy governance before activating changes.",
     "surfaces": [
@@ -63,6 +66,7 @@
     ]
   },
   {
+    "role_key": "admin_operator",
     "role": "Admin/Operator",
     "focus": "Own active defaults, lifecycle actions, and controlled promotion or rollback.",
     "surfaces": [
@@ -169,9 +173,10 @@
   }
 } %}
 
-{% macro render_role_surface_guidance(active_nav) -%}
+{% macro render_role_surface_guidance(active_nav, visible_roles=None) -%}
 <div class="role-surface-list" data-testid="role-surface-guidance">
   {% for role_map in ROLE_SURFACE_MAP %}
+  {% if (visible_roles is none) or (role_map.role_key in visible_roles) %}
   <article class="role-surface-card">
     <h3>{{ role_map.role }}</h3>
     <p class="quiet">{{ role_map.focus }}</p>
@@ -187,11 +192,12 @@
       {% endfor %}
     </ul>
   </article>
+  {% endif %}
   {% endfor %}
 </div>
 {%- endmacro %}
 
-{% macro render_page_journey_guidance(active_nav) -%}
+{% macro render_page_journey_guidance(active_nav, visible_roles=None) -%}
 {% set journey = PAGE_GUIDANCE.get(active_nav, PAGE_GUIDANCE["_default"]) %}
 <section class="panel journey-panel" data-testid="journey-guidance">
   <h2>{{ journey.title }}</h2>
@@ -201,5 +207,15 @@
     <li>{{ step }}</li>
     {% endfor %}
   </ul>
+  {% if visible_roles %}
+  <h3>Role-Relevant Focus</h3>
+  <ul class="compact-list">
+    {% for role_map in ROLE_SURFACE_MAP %}
+    {% if role_map.role_key in visible_roles %}
+    <li><strong>{{ role_map.role }}:</strong> {{ role_map.focus }}</li>
+    {% endif %}
+    {% endfor %}
+  </ul>
+  {% endif %}
 </section>
 {%- endmacro %}

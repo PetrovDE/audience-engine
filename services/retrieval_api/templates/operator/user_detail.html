@@ -6,7 +6,7 @@
     <dt>User ID</dt><dd><code>{{ user_row.user_id }}</code></dd>
     <dt>Username</dt><dd>{{ user_row.username }}</dd>
     <dt>Display Name</dt><dd>{{ user_row.display_name }}</dd>
-    <dt>Email</dt><dd>{{ user_row.email or "—" }}</dd>
+    <dt>Email</dt><dd>{{ user_row.email or "-" }}</dd>
     <dt>Status</dt>
     <dd>
       {% if user_row.is_active %}
@@ -29,6 +29,14 @@
     <dt>Updated</dt><dd>{{ user_row.updated_at }}</dd>
   </dl>
   <p><a href="/operator/admin/users">Back to user list</a></p>
+</section>
+
+<section class="panel">
+  <h2>Credentials</h2>
+  <p class="quiet">Manage password set/reset and view credential status.</p>
+  <p>
+    <a href="/operator/admin/users/{{ user_row.user_id }}/credentials">Open credential management</a>
+  </p>
 </section>
 
 <section class="panel">
@@ -123,4 +131,3 @@
   {% endif %}
 </section>
 {% endblock %}
-

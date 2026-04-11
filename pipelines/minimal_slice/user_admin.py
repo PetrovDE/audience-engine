@@ -5,6 +5,7 @@ import json
 import os
 from typing import Any
 
+from . import user_login
 from .user_admin_service import UserAdminService
 
 _service = UserAdminService()
@@ -12,6 +13,7 @@ _service = UserAdminService()
 BOOTSTRAP_ADMIN_USERNAME_ENV = "AE_BOOTSTRAP_ADMIN_USERNAME"
 BOOTSTRAP_ADMIN_DISPLAY_NAME_ENV = "AE_BOOTSTRAP_ADMIN_DISPLAY_NAME"
 BOOTSTRAP_ADMIN_EMAIL_ENV = "AE_BOOTSTRAP_ADMIN_EMAIL"
+BOOTSTRAP_ADMIN_PASSWORD_ENV = "AE_BOOTSTRAP_ADMIN_PASSWORD"
 
 
 def create_user(
@@ -105,6 +107,7 @@ def bootstrap_dev_admin_user(
     username: str | None = None,
     display_name: str | None = None,
     email: str | None = None,
+    password: str | None = None,
 ) -> dict[str, Any]:
     resolved_username = (
         username or os.getenv(BOOTSTRAP_ADMIN_USERNAME_ENV, "admin")
@@ -119,6 +122,14 @@ def bootstrap_dev_admin_user(
         if email is not None
         else os.getenv(BOOTSTRAP_ADMIN_EMAIL_ENV, "admin@example.com").strip()
     )
+    resolved_password = (
+        password
+        if password is not None
+        else os.getenv(
+            BOOTSTRAP_ADMIN_PASSWORD_ENV,
+            os.getenv("OPERATOR_UI_PASSWORD", ""),
+        ).strip()
+    )
     payload: dict[str, Any] = {
         "bootstrap": "user_admin_dev_admin",
         "mode": "dry_run" if dry_run else "apply",
@@ -126,15 +137,24 @@ def bootstrap_dev_admin_user(
         "display_name": resolved_display_name,
         "email": resolved_email,
         "required_roles": ["admin_operator"],
+        "password_seeded": bool(resolved_password),
     }
     if dry_run:
         return payload
-    payload["result"] = _service.ensure_bootstrap_admin_user(
+    result = _service.ensure_bootstrap_admin_user(
         username=resolved_username,
         display_name=resolved_display_name,
         email=resolved_email,
         actor_id="system:bootstrap",
     )
+    payload["result"] = result
+    if resolved_password:
+        user_login.set_password(
+            user_id=str(result["user_id"]),
+            new_password=resolved_password,
+            actor_id="system:bootstrap",
+            require_password_reset=False,
+        )
     return payload
 
 
@@ -159,6 +179,11 @@ def _main() -> None:
         help="Override bootstrap display name.",
     )
     parser.add_argument("--email", default=None, help="Override bootstrap email.")
+    parser.add_argument(
+        "--password",
+        default=None,
+        help="Override bootstrap password (not printed in output).",
+    )
     args = parser.parse_args()
 
     if not args.bootstrap_dev_admin:
@@ -169,6 +194,7 @@ def _main() -> None:
         username=args.username,
         display_name=args.display_name,
         email=args.email,
+        password=args.password,
     )
     print(json.dumps(result, indent=2))
 

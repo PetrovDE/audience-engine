@@ -10,6 +10,7 @@ from pipelines.minimal_slice.control_plane_registry import validate_lifecycle_tr
 from pipelines.minimal_slice.control_plane_registry_action_audit import (
     list_recent_registry_lifecycle_actions,
 )
+from services.retrieval_api.operator_access import is_action_allowed
 from services.retrieval_api.operator_control_plane_governance import (
     promotion_governance_context,
 )
@@ -64,7 +65,9 @@ def resolve_action(action_name: str) -> tuple[str, dict[str, str]]:
     action = _LIFECYCLE_ACTIONS.get(resolved)
     if action is None:
         supported = ", ".join(sorted(_LIFECYCLE_ACTIONS))
-        raise ValueError(f"Unsupported lifecycle action: {action_name}. Supported: {supported}")
+        raise ValueError(
+            f"Unsupported lifecycle action: {action_name}. Supported: {supported}"
+        )
     return resolved, action
 
 
@@ -157,6 +160,14 @@ def render_detail_page(
     status_code: int = 200,
 ) -> Response:
     resolved_entity_type = resolve_entity_type(entity_type)
+    can_lifecycle_actions = is_action_allowed(
+        roles=tuple(principal.roles),
+        action_key="operator.control_plane.lifecycle.transition",
+    )
+    can_record_evidence = is_action_allowed(
+        roles=tuple(principal.roles),
+        action_key="operator.control_plane.evidence.record",
+    )
     version_row = load_version_detail(
         entity_type=resolved_entity_type,
         entity_key=entity_key,
@@ -208,8 +219,11 @@ def render_detail_page(
             "version_row": version_row,
             "active_version_id": active_version_id,
             "action_controls": _action_controls(
-                str(version_row.get("lifecycle_state") or "")
+                str(version_row.get("lifecycle_state") or ""),
+                allow_lifecycle_actions=can_lifecycle_actions,
             ),
+            "can_lifecycle_actions": can_lifecycle_actions,
+            "can_record_evidence": can_record_evidence,
             "promotion_readiness": governance["promotion_readiness"],
             "promotion_evidence_rows": governance["promotion_evidence_rows"],
             "promotion_decision_rows": governance["promotion_decision_rows"],
@@ -238,7 +252,10 @@ def _entity_nav_options() -> list[dict[str, str]]:
 
 def _with_management_nav(context: dict[str, Any]) -> dict[str, Any]:
     nav_items = list(context.get("nav_items", []))
-    if not any(item.get("path") == CONTROL_PLANE_LIST_PATH for item in nav_items):
+    show_fallback = bool(context.get("show_control_plane_nav_fallback", True))
+    if show_fallback and not any(
+        item.get("path") == CONTROL_PLANE_LIST_PATH for item in nav_items
+    ):
         nav_items.append(
             {"path": CONTROL_PLANE_LIST_PATH, "label": "Control-Plane Versions"}
         )
@@ -297,7 +314,11 @@ def _load_list_rows(
     return enriched
 
 
-def _action_controls(current_state: str) -> list[dict[str, Any]]:
+def _action_controls(
+    current_state: str,
+    *,
+    allow_lifecycle_actions: bool,
+) -> list[dict[str, Any]]:
     controls: list[dict[str, Any]] = []
     for action_name, action in _LIFECYCLE_ACTIONS.items():
         target_state = action["target_state"]
@@ -313,7 +334,7 @@ def _action_controls(current_state: str) -> list[dict[str, Any]]:
                 "action_name": action_name,
                 "label": action["label"],
                 "target_state": target_state,
-                "enabled": allowed,
+                "enabled": allowed and allow_lifecycle_actions,
             }
         )
     return controls

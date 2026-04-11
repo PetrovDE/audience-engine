@@ -35,7 +35,7 @@
           {{ item.label }}
         </a>
         {% endfor %}
-        {% if not nav_state.has_control_plane_versions %}
+        {% if show_control_plane_nav_fallback|default(true) and not nav_state.has_control_plane_versions %}
         <a href="/operator/control-plane/versions" class="nav-link {% if active_nav == '/operator/control-plane/versions' %}active{% endif %}">
           Control-Plane Versions
         </a>
@@ -43,7 +43,7 @@
       </nav>
       <section class="legend">
         <h2>Role Entry Points</h2>
-        {{ role_guidance.render_role_surface_guidance(active_nav) }}
+        {{ role_guidance.render_role_surface_guidance(active_nav, visible_guidance_roles|default(none)) }}
       </section>
       <section class="legend">
         <h2>Status Legend</h2>
@@ -66,7 +66,7 @@
       {% if error_message %}
       <div class="alert error"><pre>{{ error_message }}</pre></div>
       {% endif %}
-      {{ role_guidance.render_page_journey_guidance(active_nav) }}
+      {{ role_guidance.render_page_journey_guidance(active_nav, visible_guidance_roles|default(none)) }}
       {% block content %}{% endblock %}
     </main>
   </div>

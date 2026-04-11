@@ -109,6 +109,9 @@
 <section class="panel">
   <h2>Lifecycle Actions</h2>
   <p class="quiet">Actions are explicit and mapped to centralized lifecycle transitions. Activation also runs centralized governance checks.</p>
+  {% if not can_lifecycle_actions %}
+  <p class="quiet">Your role has read access to this page but cannot execute lifecycle transitions.</p>
+  {% endif %}
   <div class="action-row">
     {% for action in action_controls %}
     {% set activate_not_applicable = action.action_name == 'activate' and promotion_readiness.governance_applicability == 'not_applicable_already_active' %}
@@ -129,6 +132,9 @@
 
 <section class="panel">
   <h2>Record Promotion Evidence</h2>
+  {% if not can_record_evidence %}
+  <p class="quiet">Your role can view governance details but cannot record promotion evidence.</p>
+  {% else %}
   <form class="form-grid" method="post" action="/operator/control-plane/versions/{{ entity_type }}/{{ entity_key }}/{{ version_id }}/evidence">
     <label for="evidence_type">Evidence type</label>
     <select id="evidence_type" name="evidence_type">
@@ -149,6 +155,7 @@
     <div></div>
     <button class="button" type="submit">Record Evidence</button>
   </form>
+  {% endif %}
 </section>
 
 <section class="panel">

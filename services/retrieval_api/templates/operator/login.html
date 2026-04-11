@@ -9,10 +9,10 @@
 <body class="login-page">
   <main class="login-card">
     <h1>Audience Engine Operator Console</h1>
-    <p>Sign in with your operator username and password from <code>OPERATOR_UI_USERNAME</code> and <code>OPERATOR_UI_PASSWORD</code>.</p>
+    <p>Sign in with a persisted operator user identity (username + password). Local env bootstrap credentials may still be used as a fallback during setup.</p>
     {% if not auth_configured %}
     <div class="alert error">
-      Login is not configured. Set <code>OPERATOR_UI_USERNAME</code> and <code>OPERATOR_UI_PASSWORD</code> in your local environment bootstrap.
+      Login is not configured. Set <code>AE_OPERATOR_SESSION_SECRET</code> in your local environment bootstrap.
     </div>
     {% endif %}
     {% if error_message %}

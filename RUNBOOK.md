@@ -25,11 +25,13 @@ This runbook covers Prometheus + Grafana monitoring for:
    ```bash
    uv run --env-file infra/.env.local python -m uvicorn services.retrieval_api.app:app --host 0.0.0.0 --port 8000 --reload
    ```
-   This `--env-file` load is required for local Operator Console login bootstrap (`OPERATOR_UI_USERNAME` / `OPERATOR_UI_PASSWORD` from `infra/.env.local`).
+   This `--env-file` load is required for local Operator Console login bootstrap (`AE_OPERATOR_SESSION_SECRET`, bootstrap admin env vars, and optional local fallback `OPERATOR_UI_USERNAME` / `OPERATOR_UI_PASSWORD` from `infra/.env.local`).
 4. Bootstrap one local/dev admin user for Stage 9 user administration:
    ```bash
    uv run --env-file infra/.env.local python -m pipelines.minimal_slice.user_admin --bootstrap-dev-admin
    ```
+   This bootstrap path also seeds admin credentials when `AE_BOOTSTRAP_ADMIN_PASSWORD` is configured (or falls back to `OPERATOR_UI_PASSWORD` if present).
+   You can then sign in at `http://localhost:8000/operator/login` with the bootstrap username/password.
    Optional preview without writes:
    ```bash
    uv run --env-file infra/.env.local python -m pipelines.minimal_slice.user_admin --bootstrap-dev-admin --dry-run
